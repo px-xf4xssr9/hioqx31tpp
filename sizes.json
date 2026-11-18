@@ -3,24 +3,24 @@
   "raw": 14650046,
   "brotli": 3248355,
   "wasm_br": 3235686,
-  "total_br": 3250433
+  "total_br": 3250461
  },
  "lite3d": {
-  "raw": 535590,
-  "brotli": 164915,
-  "wasm_br": 159664,
-  "total_br": 166993
+  "raw": 536327,
+  "brotli": 165205,
+  "wasm_br": 159896,
+  "total_br": 167311
  },
  "min2d": {
   "raw": 12156069,
   "brotli": 2784627,
   "wasm_br": 2771978,
-  "total_br": 2786705
+  "total_br": 2786733
  },
  "three": {
-  "raw": 545191,
-  "brotli": 112922,
+  "raw": 545369,
+  "brotli": 112892,
   "wasm_br": 0,
-  "total_br": 115000
+  "total_br": 114998
  }
 }

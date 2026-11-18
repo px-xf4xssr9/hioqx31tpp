@@ -46,6 +46,8 @@ window.gengineReport = (kind, value) => {
     set("fps_avg", "Средний FPS", "меряю 12 с…");
   } else if (kind === "fps_avg") {
     set("fps_avg", "Средний FPS", value.toFixed(1));
+  } else if (kind === "cpu_ms") {
+    set("cpu_ms", "Процессор на кадр", `${value.toFixed(2)} мс`);
   } else if (kind === "fps_low") {
     set("fps_low", "1% худших", `${value.toFixed(1)} FPS`);
     panel.classList.add("done");
