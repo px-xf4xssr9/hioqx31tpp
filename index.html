@@ -16,6 +16,7 @@
 </head>
 <body>
 <h1>Замер этапа 0</h1>
+<p>Сборка 11182302</p>
 <p>Открой каждую сборку на телефоне, подожди 12 секунд, пока рамка панели справа внизу не станет зелёной, и нажми «Скопировать результат». Пришли мне результаты.</p>
 <table id="t">
   <tr><th>Сборка</th><th>Что это</th><th>Вес старта (brotli)</th><th>Открыть</th></tr>
@@ -28,11 +29,11 @@
     ["three", "Эталон на Three.js: та же сцена"],
     ["min2d", "Rust + Bevy: ядро + 2D + интерфейс"],
   ];
-  fetch("sizes.json").then((r) => r.json()).catch(() => ({})).then((sizes) => {
+  fetch("sizes.json?b=11182302").then((r) => r.json()).catch(() => ({})).then((sizes) => {
     const t = document.getElementById("t");
     for (const [id, what] of rows) {
       const s = sizes[id] ? `${(sizes[id].total_br / 1048576).toFixed(2)} МБ` : "—";
-      const links = [1000, 10000, 50000].map((n) => `<a href="${id}/?units=${n}">${n}</a>`).join(" · ");
+      const links = [1000, 10000, 50000].map((n) => `<a href="${id}/?units=${n}&b=11182302">${n}</a>`).join(" · ");
       t.insertAdjacentHTML("beforeend", `<tr><td>${id}</td><td>${what}</td><td>${s}</td><td>${links}</td></tr>`);
     }
   });

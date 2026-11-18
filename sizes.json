@@ -6,10 +6,10 @@
   "total_br": 3250482
  },
  "lite3d": {
-  "raw": 926056,
-  "brotli": 204317,
+  "raw": 926100,
+  "brotli": 204326,
   "wasm_br": 199005,
-  "total_br": 206444
+  "total_br": 206453
  },
  "min2d": {
   "raw": 12156069,
@@ -18,9 +18,9 @@
   "total_br": 2786754
  },
  "three": {
-  "raw": 545475,
-  "brotli": 113099,
+  "raw": 545508,
+  "brotli": 113111,
   "wasm_br": 0,
-  "total_br": 115226
+  "total_br": 115238
  }
 }
