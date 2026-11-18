@@ -5,6 +5,12 @@
   "wasm_br": 3235686,
   "total_br": 3250433
  },
+ "lite3d": {
+  "raw": 535590,
+  "brotli": 164915,
+  "wasm_br": 159664,
+  "total_br": 166993
+ },
  "min2d": {
   "raw": 12156069,
   "brotli": 2784627,
