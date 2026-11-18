@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex,nofollow">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GEngine · замер этапа 0</title>
+<style>
+  body { margin: 0; padding: 24px; background: #1e2128; color: #eee; font: 15px/1.5 system-ui, sans-serif; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p { color: #aab; max-width: 640px; }
+  table { border-collapse: collapse; margin: 16px 0; }
+  td, th { padding: 6px 12px; border-bottom: 1px solid #333a46; text-align: left; }
+  a { color: #8fbaff; }
+</style>
+</head>
+<body>
+<h1>Замер этапа 0</h1>
+<p>Открой каждую сборку на телефоне, подожди 12 секунд, пока рамка панели справа внизу не станет зелёной, и нажми «Скопировать результат». Пришли мне три результата.</p>
+<table id="t">
+  <tr><th>Сборка</th><th>Что это</th><th>Вес старта (brotli)</th><th>Открыть</th></tr>
+</table>
+<p>Сначала по 1000 юнитов. Если держит 60 FPS — попробуй 5000 и 10000.</p>
+<script>
+  const rows = [
+    ["bench3d", "Rust + Bevy, 3D: уровень, юниты, интерфейс"],
+    ["three", "Эталон на Three.js: та же сцена"],
+    ["min2d", "Rust + Bevy: ядро + 2D + интерфейс"],
+  ];
+  fetch("sizes.json").then((r) => r.json()).catch(() => ({})).then((sizes) => {
+    const t = document.getElementById("t");
+    for (const [id, what] of rows) {
+      const s = sizes[id] ? `${(sizes[id].total_br / 1048576).toFixed(2)} МБ` : "—";
+      const links = [1000, 5000, 10000].map((n) => `<a href="${id}/?units=${n}">${n}</a>`).join(" · ");
+      t.insertAdjacentHTML("beforeend", `<tr><td>${id}</td><td>${what}</td><td>${s}</td><td>${links}</td></tr>`);
+    }
+  });
+</script>
+</body>
+</html>

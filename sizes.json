@@ -1,0 +1,20 @@
+{
+ "bench3d": {
+  "raw": 14650046,
+  "brotli": 3248355,
+  "wasm_br": 3235686,
+  "total_br": 3250433
+ },
+ "min2d": {
+  "raw": 12156069,
+  "brotli": 2784627,
+  "wasm_br": 2771978,
+  "total_br": 2786705
+ },
+ "three": {
+  "raw": 545191,
+  "brotli": 112922,
+  "wasm_br": 0,
+  "total_br": 115000
+ }
+}

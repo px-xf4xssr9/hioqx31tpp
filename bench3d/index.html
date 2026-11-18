@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex,nofollow">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>GEngine · bench3d</title>
+<link rel="stylesheet" href="../harness.css">
+</head>
+<body data-variant="bench3d">
+<canvas id="bevy" tabindex="0"></canvas>
+<div id="splash"><div class="logo">GEngine</div><div class="bar"><div></div></div></div>
+<div id="panel"><div class="rows"></div><button id="copy">Скопировать результат</button></div>
+<div id="error" class="hidden"><div class="msg"></div><button id="restart">Перезапустить</button></div>
+<script type="module">
+  import { fetchWithProgress } from "../harness.js";
+  import init from "./bench3d.js";
+  // Сборка Bevy после старта бросает исключение-«выход из цикла» winit — это норма.
+  init({ module_or_path: fetchWithProgress("./bench3d_bg.wasm") }).catch((e) => {
+    if (!String(e).includes("Using exceptions for control flow")) throw e;
+  });
+</script>
+</body>
+</html>
