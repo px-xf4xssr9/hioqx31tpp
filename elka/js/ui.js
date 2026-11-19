@@ -403,6 +403,8 @@ function drawLevel() {
   objs.sort(function (a, b) { return a.y - b.y; });
   if (Z.glBegin) Z.glBegin(ctx);   // 2.13: готовые кадры объектов — пачками на WebGL2 (v32gl, пока ?gl=1)
   try { objs.forEach(function (o) { o.f(o.o); }); } finally { if (Z.glEnd) Z.glEnd(ctx); }
+  // 2.13 (прототип ?sp=1, v33sp): дальше — на верхний холст поверх слоя кадров, с той же обрезкой
+  if (Z.spTop) { var tcx = Z.spTop(ctx, L.vp, [L.fx - OM.x, L.fy - OM.t, L.BW + OM.x * 2, L.BH + OM.t + OM.b]); if (tcx) { ctx = tcx; D.setCtx(tcx); } }
   // рентген: враги за деревьями, домами и вышками видны полупрозрачным силуэтом
   // 2.8: только те враги, что действительно заслонены (вышкой, постройкой, кустом, крепостью), и слой — лишь по их рамке
   if (!(Z.save && Z.save.fxXray === false)) { var xr = xrayList(G); if (xr.list.length) withLayer(0.32, function () { for (var xi = 0; xi < xr.list.length; xi++) drawEnemyObj(xr.list[xi]); }, 0.5, xr.rect); }

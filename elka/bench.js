@@ -5,9 +5,9 @@
 (function () {
   'use strict';
   var P = new URLSearchParams(location.search);
-  var LV = Math.max(1, +P.get('lvl') || 35) - 1, N = +P.get('n') || 84, GLM = P.get('gl') === '1', FAST = GLM || P.get('fast') !== '0', CACHE = GLM || P.get('cache') === '1', DUR = 15000;
+  var LV = Math.max(1, +P.get('lvl') || 35) - 1, N = +P.get('n') || 84, GLM = P.get('gl') === '1', SPM = P.get('sp') === '1', FAST = GLM || SPM || P.get('fast') !== '0', CACHE = GLM || SPM || P.get('cache') === '1', DUR = 15000;
   window.__FAST = FAST;
-  if (CACHE && !GLM) { var ivc = setInterval(function () { if (window.Z && Z.cachesOff) { Z.cachesOff = function () { return false; }; clearInterval(ivc); } }, 5); }
+  if (CACHE && !GLM && !SPM) { var ivc = setInterval(function () { if (window.Z && Z.cachesOff) { Z.cachesOff = function () { return false; }; clearInterval(ivc); } }, 5); }
   var panel = document.createElement('div');
   panel.style.cssText = 'position:fixed;left:6px;right:6px;bottom:6px;z-index:99999;background:rgba(10,14,30,.88);color:#fff;font:13px/1.35 monospace;padding:8px;border-radius:8px;white-space:pre-wrap;pointer-events:auto';
   panel.textContent = 'Замер: загрузка игры…';
@@ -56,7 +56,7 @@
       var n = ts.length, tot = now - t0, s = ts.slice().sort(function (a, b) { return a - b; }), p99 = s[Math.min(n - 1, Math.floor(n * 0.99))];
       var G = Z.G, en = G.enemies.filter(function (e) { return !e.dead; }).length, tw = Object.keys(G.towers).length;
       var lines = [
-        'Ёлка · уровень ' + (LV + 1) + ' · врагов ' + en + ' · вышек ' + tw + ' · режим ' + (GLM ? 'WebGL2 (gl=1)' : CACHE ? 'кэши кадров для всех (cache=1)' : FAST ? 'быстрая 2.12.52' : 'обычная'),
+        'Ёлка · уровень ' + (LV + 1) + ' · врагов ' + en + ' · вышек ' + tw + ' · режим ' + (SPM ? 'слой кадров WebGL2 (sp=1' + (P.get('only') === '1' ? ', only' : '') + ')' : GLM ? 'WebGL2 (gl=1)' : CACHE ? 'кэши кадров для всех (cache=1)' : FAST ? 'быстрая 2.12.52' : 'обычная'),
         'экран ' + innerWidth + '×' + innerHeight + ' · DPR ' + (window.devicePixelRatio || 1).toFixed(2) + ' · качество ' + (Z.quality || 1).toFixed(2),
         'FPS ' + (n * 1000 / tot).toFixed(1) + ' · 1% худших ' + (1000 / p99).toFixed(1),
         'кадр ' + (tot / n).toFixed(2) + ' мс:',
@@ -66,6 +66,7 @@
         '  ожидание видеокарты и браузера ' + Math.max(0, tot / n - (upd.v + rnd.v + post.v) / n).toFixed(2) + ' мс',
         navigator.userAgent
       ];
+      if (SPM && Z.glStats) { var gs2 = Z.glStats(); lines.splice(8, 0, 'слой кадров: ' + (Z.spOn() ? 'да' : 'НЕТ') + ' · вызовов видеокарты ' + gs2.gl.toFixed(1) + ' · кадров ' + gs2.inst.toFixed(0) + ' · живых вызовов ' + gs2.live.toFixed(0) + ' · заливок текстур ' + gs2.up.toFixed(2) + ' (' + gs2.upMpx.toFixed(2) + ' Мпикс) · текстур ' + gs2.tex); }
       if (GLM && Z.glStats) { var gs = Z.glStats(); lines.splice(8, 0, 'WebGL2: ' + (Z.glOn() ? 'да' : 'НЕТ') + ' · переносов пачки на холст ' + gs.flush.toFixed(1) + ' · кадров в пачках ' + gs.inst.toFixed(0) + ' · живых вызовов ' + gs.live.toFixed(0) + ' · заливок текстур ' + gs.up.toFixed(2) + ' (' + gs.upMpx.toFixed(2) + ' Мпикс) · текстур ' + gs.tex); }
       panel.textContent = lines.join('\n');
       var b = document.createElement('button'); b.textContent = 'Скопировать результат'; b.style.cssText = 'display:block;margin-top:6px;padding:8px 12px;font:14px sans-serif';
