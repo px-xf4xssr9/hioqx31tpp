@@ -16,24 +16,28 @@
 </head>
 <body>
 <h1>Замер этапа 0</h1>
-<p>Сборка 11182331</p>
+<p>Сборка 11190020</p>
 <p>Открой каждую сборку на телефоне, подожди 12 секунд, пока рамка панели справа внизу не станет зелёной, и нажми «Скопировать результат». Пришли мне результаты.</p>
 <table id="t">
   <tr><th>Сборка</th><th>Что это</th><th>Вес старта (brotli)</th><th>Открыть</th></tr>
 </table>
-<p>Сначала по 1000 юнитов, потом 10000 и 50000.</p>
+<p>Тяжёлый тест: сравнивай строки lite3d и three на одном и том же числе юнитов. «Контроль» у пары должен совпасть.</p>
 <script>
+  // [сборка, что это, доп. параметры, варианты числа юнитов]
   const rows = [
-    ["bench3d", "Rust + Bevy, 3D: уровень, юниты, интерфейс"],
-    ["lite3d", "Rust: ядро sim + свой рендер WebGL2 (прототип)"],
-    ["three", "Эталон на Three.js: та же сцена"],
-    ["min2d", "Rust + Bevy: ядро + 2D + интерфейс"],
+    ["lite3d", "Тяжёлый тест · Rust: расталкивание, взрывы, возрождение, осколки", "heavy=1", [5000, 10000, 20000]],
+    ["three", "Тяжёлый тест · Three.js: тот же алгоритм бит в бит", "heavy=1", [5000, 10000, 20000]],
+    ["lite3d", "Rust: ядро sim + свой рендер WebGL2", "", [1000, 10000, 50000]],
+    ["three", "Эталон на Three.js: та же сцена", "", [1000, 10000, 50000]],
+    ["bench3d", "Rust + рендер Bevy (для сравнения)", "", [1000, 10000]],
+    ["min2d", "Rust + Bevy: ядро + 2D + интерфейс", "", [1000, 10000]],
   ];
-  fetch("sizes.json?b=11182331").then((r) => r.json()).catch(() => ({})).then((sizes) => {
+  fetch("sizes.json?b=11190020").then((r) => r.json()).catch(() => ({})).then((sizes) => {
     const t = document.getElementById("t");
-    for (const [id, what] of rows) {
+    for (const [id, what, extra, counts] of rows) {
       const s = sizes[id] ? `${(sizes[id].total_br / 1048576).toFixed(2)} МБ` : "—";
-      const links = [1000, 10000, 50000].map((n) => `<a href="${id}/?units=${n}&b=11182331">${n}</a>`).join(" · ");
+      const q = extra ? `${extra}&` : "";
+      const links = counts.map((n) => `<a href="${id}/?${q}units=${n}&b=11190020">${n}</a>`).join(" · ");
       t.insertAdjacentHTML("beforeend", `<tr><td>${id}</td><td>${what}</td><td>${s}</td><td>${links}</td></tr>`);
     }
   });
