@@ -16,7 +16,7 @@
 </head>
 <body>
 <h1>Замер этапа 0</h1>
-<p>Сборка 11190033</p>
+<p>Сборка 11190051</p>
 <p>Открой каждую сборку на телефоне, подожди 12 секунд, пока рамка панели справа внизу не станет зелёной, и нажми «Скопировать результат». Пришли мне результаты.</p>
 <table id="t">
   <tr><th>Сборка</th><th>Что это</th><th>Вес старта (brotli)</th><th>Открыть</th></tr>
@@ -28,17 +28,20 @@
     ["lite3d-simd", "Тяжёлый тест · Rust + SIMD (векторные инструкции WASM)", "heavy=1", [5000, 10000, 20000]],
     ["lite3d", "Тяжёлый тест · Rust: расталкивание, взрывы, возрождение, осколки", "heavy=1", [5000, 10000, 20000]],
     ["three", "Тяжёлый тест · Three.js: тот же алгоритм бит в бит", "heavy=1", [5000, 10000, 20000]],
+    ["babylon", "Тяжёлый тест · Babylon.js: тот же алгоритм бит в бит", "heavy=1", [5000, 10000, 20000]],
+    ["three", "Тяжёлый тест · Three.js, JS без ограничений (контроль не совпадёт)", "heavy=1&fast=1", [5000, 10000, 20000]],
+    ["babylon", "Тяжёлый тест · Babylon.js, JS без ограничений (контроль не совпадёт)", "heavy=1&fast=1", [5000, 10000, 20000]],
     ["lite3d", "Rust: ядро sim + свой рендер WebGL2", "", [1000, 10000, 50000]],
     ["three", "Эталон на Three.js: та же сцена", "", [1000, 10000, 50000]],
     ["bench3d", "Rust + рендер Bevy (для сравнения)", "", [1000, 10000]],
     ["min2d", "Rust + Bevy: ядро + 2D + интерфейс", "", [1000, 10000]],
   ];
-  fetch("sizes.json?b=11190033").then((r) => r.json()).catch(() => ({})).then((sizes) => {
+  fetch("sizes.json?b=11190051").then((r) => r.json()).catch(() => ({})).then((sizes) => {
     const t = document.getElementById("t");
     for (const [id, what, extra, counts] of rows) {
       const s = sizes[id] ? `${(sizes[id].total_br / 1048576).toFixed(2)} МБ` : "—";
       const q = extra ? `${extra}&` : "";
-      const links = counts.map((n) => `<a href="${id}/?${q}units=${n}&b=11190033">${n}</a>`).join(" · ");
+      const links = counts.map((n) => `<a href="${id}/?${q}units=${n}&b=11190051">${n}</a>`).join(" · ");
       t.insertAdjacentHTML("beforeend", `<tr><td>${id}</td><td>${what}</td><td>${s}</td><td>${links}</td></tr>`);
     }
   });

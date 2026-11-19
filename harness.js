@@ -32,6 +32,8 @@ window.gengineParam = (name) => {
   return v === null ? NaN : Number(v);
 };
 
+window.gengineNote = (label, text) => set(`note_${label}`, label, text);
+
 window.gengineReport = (kind, value) => {
   if (kind === "first_frame") {
     const t = performance.now();
