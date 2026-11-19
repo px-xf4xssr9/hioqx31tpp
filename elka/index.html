@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta name="robots" content="noindex,nofollow">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Защити Ёлку! Башенная защита</title>
+<link rel="icon" href="data:,">
+<link rel="preload" as="image" href="cover.webp" fetchpriority="high">
+<!-- Yandex Games SDK -->
+<script src="/sdk.js"></script>
+<style>
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #16203f;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
+    touch-action: none; overscroll-behavior: none; }
+  canvas { position: fixed; left: 0; top: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="boot" style="position:fixed;inset:0;z-index:9;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:max(8vh,30px);box-sizing:border-box;background:url(cover.webp) 45% 40%/cover no-repeat,url(data:image/webp;base64,UklGRvQBAABXRUJQVlA4IOgBAADwCgCdASowABsAPsFSoUqnpSMhsBqqqPAYCWwAnTLLu07XOrhy9tjdpMoB0v+HBc6gX7/HFXCXz8cUthehf1qE42PNNbnEY7f/bDlyDymXdH8PIOXqUrgwUgPqzIN9DAAA/vaorZMiD2kEjofQinpWJQevbU3RJxU6qhe77gXV2cO4/gGfA6Q9dOZLXu8IQsHZXi3sTnuG9s0gFzii/nVI3XqHOd7/brtOrwVC4e/7NaEAS4hNwlws7xzcMwU1eyz5xOGrg+BQ1ReZoSJyDwMvLLJrFglxFspnFgjjiCu6I8NupJvOFdeBJullPBkcv/fFRR3vLYHHaQRRPtyaFV1OwA2c5o7svknS7x6DjkVteAX2dsONHsuKBIRSf/O8yv/81vzZ615PIh9OGlkKS+rjdxhEDjZR7HM0/Lkq/vwC+htVQeZOZhkScHjRj0kkvbZs3SNz19MNeKgCec0RFdXEhbGFpdqjJI4h5ojjHOUKCer8FQxaL6QfHo9qD2We4ZvwYG2pYjlliZJ68Npnd2OUaP3TeyW2UUP3k402TaPIRbWfN8p4ocadxKLDTq5EWeCKA4UR97LZ0ogojWu7mGIx5cotCR7GW5s/nkNF42y93rsOEMCQ5mqt9B0Wta/SVlekFFv0VuwAAA==) 45% 40%/cover no-repeat,#1b2448">
+<div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(11,14,44,0) 35%,rgba(11,14,44,.85) 100%)"></div>
+<div id="bootpct" style="position:relative;font:900 15px 'Arial Black',system-ui,sans-serif;letter-spacing:.08em;color:#fff;-webkit-text-stroke:3px #1b2448;paint-order:stroke fill;margin-bottom:10px">ЗАГРУЗКА 0%</div>
+<div style="position:relative;width:min(60vw,320px);height:12px;border-radius:6px;background:rgba(27,36,72,.75);border:3px solid #1b2448;overflow:hidden"><div id="bootbar" style="height:100%;width:100%;background:linear-gradient(90deg,#ffd54a,#ffb02e);transform-origin:left center;transform:scaleX(.03);transition:transform .25s"></div></div></div>
+<script>(function(){var T=76,b=document.getElementById('bootbar'),p=document.getElementById('bootpct');try{if(/^en/.test(navigator.language)&&!/vk_language=ru/.test(location.search)){p.textContent='LOADING 0%';}}catch(e){}
+window.__bootK=0;function t(){if(!document.getElementById('boot'))return;var n=0;try{performance.getEntriesByType('resource').forEach(function(r){if(/\.js(\?|$)/.test(r.name)&&r.responseEnd>0)n++;});}catch(e){}var k=Math.min(1,n/T)*0.35;window.__bootK=k;b.style.transform='scaleX('+Math.max(0.03,k)+')';p.textContent=p.textContent.replace(/\d+%/,Math.round(k*100)+'%');setTimeout(t,200);}t();})();</script>
+<!-- 2.12.18 · загрузка, на которую интересно смотреть (длительность та же): гирлянда вместо полоски — лампочки загораются по мере
+     загрузки; советы по игре сменяются каждые 3 с; падающие снежинки можно ловить пальцем — счёт и рекорд. Живёт поверх обоих экранов
+     загрузки (до скриптов и экрана «Играть») и исчезает, как только игрок нажал «Играть». -->
+<style>
+#ld-fun{position:fixed;inset:0;z-index:2147483000;pointer-events:none;overflow:hidden;font-family:'Arial Black',system-ui,sans-serif}
+#ld-fun .fl{position:absolute;top:-60px;pointer-events:auto;cursor:pointer;color:#fff;text-shadow:0 0 6px rgba(150,220,255,.9),0 2px 0 #1b2448;user-select:none;-webkit-tap-highlight-color:transparent;will-change:transform}
+#ld-fun .fl.pop{animation:ldPop .35s ease-out forwards;pointer-events:none}
+@keyframes ldPop{to{transform:scale(2.2);opacity:0}}
+#ld-fun .plus{position:absolute;color:#ffd54a;font-size:18px;-webkit-text-stroke:3px #1b2448;paint-order:stroke fill;animation:ldUp .7s ease-out forwards;pointer-events:none}
+@keyframes ldUp{to{transform:translateY(-46px);opacity:0}}
+#ld-cnt{position:absolute;right:12px;top:max(12px,env(safe-area-inset-top));padding:6px 12px;border-radius:16px;background:rgba(27,36,72,.82);border:3px solid #1b2448;color:#fff;font-size:15px;opacity:0;transition:opacity .3s,transform .15s}
+#ld-cnt.on{opacity:1}#ld-cnt.bump{transform:scale(1.18)}
+#ld-tip{position:absolute;left:12px;top:max(12px,env(safe-area-inset-top));width:min(calc(100% - 104px),420px);box-sizing:border-box;padding:9px 14px;border-radius:16px;background:rgba(27,36,72,.82);border:3px solid #1b2448;color:#fff;font:700 13.5px/1.3 system-ui,sans-serif;text-align:center;transition:opacity .35s}
+#ld-tip b{color:#ffd54a}
+#ld-gar{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(max(8vh,30px) - 6px);width:min(70vw,340px);height:34px;transition:opacity .3s}
+#ld-gar svg{width:100%;height:100%;overflow:visible}
+#ld-gar .b{transition:fill .25s,filter .25s}
+#ld-gar .b.on{animation:ldBlink 1.6s ease-in-out infinite}
+@keyframes ldBlink{50%{opacity:.75}}
+#boot>div:nth-child(3),#zs-load{opacity:0!important}
+</style>
+<script>(function(){
+var EN=/^en/.test(navigator.language)&&!/vk_language=ru/.test(location.search);
+var TIPS=EN?['Drag a tower onto an <b>identical</b> one — they merge into a stronger one','Enemies <b>avoid</b> heavy defenses — arrows show their path','Tap the <b>road</b> to place traps and barricades','Brutes break towers — tap a tower to <b>repair</b> it','<b>Blizzard</b> at the bottom slows every enemy','Catch the falling <b>snowflakes</b> while we load!']:['Перетащи вышку на <b>такую же</b> — они сольются в сильную','Враги <b>обходят</b> места, где много вышек — смотри на стрелки','Нажми на <b>дорогу</b> — там ставятся ловушки и баррикады','Толстяки ломают вышки — нажми на вышку и <b>почини</b>','<b>Метель</b> внизу экрана замедляет всех врагов','Пока грузится — <b>лови снежинки</b>! Сколько успеешь?'];
+var root=document.createElement('div');root.id='ld-fun';
+var N=13,COL=['#ff5a5f','#ffd54a','#5ac8ff','#9dff6a','#ff8fd6'],sv='<svg viewBox="0 0 340 34"><path d="M4 6 Q170 40 336 6" fill="none" stroke="#1b2448" stroke-width="3"/>';
+for(var i=0;i<N;i++){var x=10+i*(320/(N-1)),y=6+34*4*(x/340)*(1-x/340)*0.62;sv+='<rect x="'+(x-2.5)+'" y="'+(y-1)+'" width="5" height="6" rx="1.5" fill="#1b2448"/><ellipse class="b" data-c="'+COL[i%5]+'" cx="'+x+'" cy="'+(y+10)+'" rx="6.5" ry="8.5" fill="#3a4470" stroke="#1b2448" stroke-width="2.5"/>';}
+root.innerHTML='<div id="ld-tip"></div><div id="ld-cnt">❄ 0</div><div id="ld-gar">'+sv+'</svg></div>';
+document.body.appendChild(root);
+var tip=root.querySelector('#ld-tip'),cnt=root.querySelector('#ld-cnt'),gar=root.querySelector('#ld-gar'),bulbs=root.querySelectorAll('.b'),ti=Math.floor(Math.random()*TIPS.length),caught=0,best=0;
+try{best=+localStorage.getItem('elka_ld_best')||0}catch(e){}
+function nextTip(){tip.style.opacity=0;setTimeout(function(){ti=(ti+1)%TIPS.length;tip.innerHTML=TIPS[ti];tip.style.opacity=1},350)}
+tip.innerHTML=TIPS[ti];var tipT=setInterval(nextTip,3200);
+// снежинки: падают с разной скоростью, нажатие — «пух», +1 и счёт
+function flake(){if(!root.parentNode)return;var f=document.createElement('div'),sz=22+Math.random()*22,dur=4+Math.random()*3.5,x=Math.random()*(innerWidth-sz),sw=(Math.random()-.5)*80;
+ f.className='fl';f.textContent='❄';f.style.fontSize=sz+'px';f.style.left=x+'px';root.appendChild(f);
+ var a=f.animate([{transform:'translate(0,0) rotate(0)'},{transform:'translate('+sw+'px,'+(innerHeight+90)+'px) rotate('+(Math.random()>.5?200:-200)+'deg)'}],{duration:dur*1000,easing:'linear'});a.onfinish=function(){f.remove()};
+ var hit=function(ev){ev.preventDefault();ev.stopPropagation();if(f.classList.contains('pop'))return;var r=f.getBoundingClientRect();a.pause();f.style.transform=getComputedStyle(f).transform;a.cancel();f.style.top=r.top+'px';f.style.left=r.left+'px';f.classList.add('pop');setTimeout(function(){f.remove()},380);
+  caught++;cnt.textContent='❄ '+caught+(caught>best&&best?' · '+(EN?'record!':'рекорд!'):'');cnt.classList.add('on','bump');setTimeout(function(){cnt.classList.remove('bump')},150);
+  var p=document.createElement('div');p.className='plus';p.textContent='+1';p.style.left=(r.left+r.width/2-10)+'px';p.style.top=(r.top)+'px';root.appendChild(p);setTimeout(function(){p.remove()},720);
+  if(caught>best){try{localStorage.setItem('elka_ld_best',caught)}catch(e){}}};
+ f.addEventListener('pointerdown',hit);f.addEventListener('touchstart',hit,{passive:false});}
+var flT=setInterval(flake,650);flake();setTimeout(flake,250);
+// прогресс: берём с полоски того экрана, что сейчас показан (сама полоска спрятана), — лампочки загораются по очереди
+function prog(){var g=document.getElementById('zs-bar')||document.getElementById('bootbar');if(!g)return 0;var m=/scaleX\(([\d.]+)\)/.exec(g.style.transform||'');return m?+m[1]:0}
+var lit=0,gone=0;
+function tick(){var gate=document.getElementById('zs-gate'),boot=document.getElementById('boot');
+ if(!boot&&(!gate||gate.style.display==='none')||gone||(window.Z&&Z.loaded&&Z.ui&&Z.ui.screen!=='loading')){clearInterval(flT);clearInterval(tipT);root.remove();return}
+ if(gate&&!root._top){root._top=1;document.body.appendChild(root);var go=document.getElementById('zs-go');if(go){go.addEventListener('pointerdown',function(){gone=1},true);go.addEventListener('click',function(){gone=1},true)}}
+ var pctEl=document.getElementById('zs-pct'),done=pctEl&&pctEl.style.opacity==='0';
+ gar.style.opacity=done?0:1;
+ var want=Math.min(N,Math.round(prog()*N));if(done)want=N;
+ for(;lit<want;lit++){var b=bulbs[lit],c=b.getAttribute('data-c');b.setAttribute('fill',c);b.style.filter='drop-shadow(0 0 6px '+c+')';b.classList.add('on');b.style.animationDelay=(lit*0.13)+'s'}
+ requestAnimationFrame(tick)}
+requestAnimationFrame(tick);
+})();</script>
+<script src="assets.js"></script>
+<script src="js/sfxa_index.js"></script>
+<script src="js/telemetry.js"></script>
+<script src="js/preload.js"></script>
+<script src="js/data.js"></script>
+<script src="js/level.js"></script>
+<script src="js/game.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/draw.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/story.js"></script>
+<script src="js/voice_data.js"></script>
+<script src="js/voice_en.js"></script>
+<script src="js/pak_index.js"></script>
+<script src="js/voice_tags.js"></script>
+<script src="js/v26a.js"></script>
+<script src="js/v26b.js"></script>
+<script src="js/v26d.js"></script>
+<script src="js/v26e.js"></script>
+<script src="js/v26c.js"></script>
+<script src="js/v26f.js"></script>
+<script src="js/v26h.js"></script>
+<script src="js/v26g.js"></script>
+<script src="js/v26i.js"></script>
+<script src="js/v26j.js"></script>
+<script src="js/v26l.js"></script>
+<script src="js/voice_m13.js"></script>
+<script src="js/v26m.js"></script>
+<script src="js/v27a.js"></script>
+<script src="js/v27b.js"></script>
+<script src="js/v27c.js"></script>
+<script src="js/font.js"></script>
+<script src="js/v27d.js"></script>
+<script src="js/v27e.js"></script>
+<script src="js/v27f.js"></script>
+<script src="js/v28a.js"></script>
+<script src="js/v28b.js"></script>
+<script src="js/v29a.js"></script>
+<script src="js/v29b.js"></script>
+<script src="js/v29c.js"></script>
+<script src="js/v29d.js"></script>
+<script src="js/v29e.js"></script>
+<script src="js/v29f.js"></script>
+<script src="js/v29g.js"></script>
+<script src="js/v29h.js"></script>
+<script src="js/v29i.js"></script>
+<script src="js/v29k.js"></script>
+<script src="js/v29l.js"></script>
+<script src="js/v29m.js"></script>
+<script src="js/v29n.js"></script>
+<script src="js/v29o.js"></script>
+<script src="js/v29p.js"></script>
+<script src="js/v29q.js"></script>
+<script src="js/v29r.js"></script>
+<script src="js/v29s.js"></script>
+<script src="js/v29t.js"></script>
+<script src="js/v29u.js"></script>
+<script src="js/v29v.js"></script>
+<script src="js/v29w.js"></script>
+<script src="js/v29x.js"></script>
+<script src="js/v29y.js"></script>
+<script src="js/v29z.js"></script>
+<script src="js/v30a.js"></script>
+<script src="js/v30b.js"></script>
+<script src="js/v30c.js"></script>
+<script src="js/v30d.js"></script>
+<script src="js/v30e.js"></script>
+<script src="js/v30f.js"></script>
+<script src="js/v30g.js"></script>
+<script src="js/v30h.js"></script>
+<script src="js/v30i.js"></script>
+<script src="js/v30j.js"></script>
+<script src="js/v30k.js"></script>
+<script src="js/v30l.js"></script>
+<script src="js/v30m.js"></script>
+<script src="js/v30n.js"></script>
+<script src="js/v30o.js"></script>
+<script src="js/v31a.js"></script>
+<script src="js/splash.js"></script>
+<script src="js/plat.js"></script>
+<script src="js/main.js"></script>
+<script src="bench.js"></script>
+</body>
+</html>
