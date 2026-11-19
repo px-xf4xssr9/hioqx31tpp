@@ -401,10 +401,7 @@ function drawLevel() {
   if (G.L.landmark) { var lm = G.L.landmark; objs.push({ y: lm.r + 1.9, f: function () { D.landmark(G.info.region, X(lm.c + 1), Y(lm.r + 1.9), cs, t); } }); }
   if (Z.drawObjs) Z.drawObjs(objs, X, Y, cs, t);
   objs.sort(function (a, b) { return a.y - b.y; });
-  if (Z.glBegin) Z.glBegin(ctx);   // 2.13: готовые кадры объектов — пачками на WebGL2 (v32gl, пока ?gl=1)
-  try { objs.forEach(function (o) { o.f(o.o); }); } finally { if (Z.glEnd) Z.glEnd(ctx); }
-  // 2.13 (прототип ?sp=1, v33sp): дальше — на верхний холст поверх слоя кадров, с той же обрезкой
-  if (Z.spTop) { var tcx = Z.spTop(ctx, L.vp, [L.fx - OM.x, L.fy - OM.t, L.BW + OM.x * 2, L.BH + OM.t + OM.b]); if (tcx) { ctx = tcx; D.setCtx(tcx); } }
+  objs.forEach(function (o) { o.f(o.o); });
   // рентген: враги за деревьями, домами и вышками видны полупрозрачным силуэтом
   // 2.8: только те враги, что действительно заслонены (вышкой, постройкой, кустом, крепостью), и слой — лишь по их рамке
   if (!(Z.save && Z.save.fxXray === false)) { var xr = xrayList(G); if (xr.list.length) withLayer(0.32, function () { for (var xi = 0; xi < xr.list.length; xi++) drawEnemyObj(xr.list[xi]); }, 0.5, xr.rect); }
@@ -571,17 +568,12 @@ function drawHero(H) {
   }
   if (UI.heroSel === H) { ctx.globalAlpha = 0.6 + 0.3 * Math.sin(Z.time * 8); D.ell(x, y, cs * 0.45, cs * 0.18, null); ctx.strokeStyle = '#7dff8a'; ctx.lineWidth = 3; ctx.stroke(); ctx.globalAlpha = 1;
     ctx.beginPath(); ctx.arc(x, y, H.r * cs, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(125,255,138,0.45)'; ctx.lineWidth = 2; ctx.setLineDash([6, 6]); ctx.stroke(); ctx.setLineDash([]); }
-  if (H.moving) { var mtx = X(H.tx), mty = Y(H.ty), mtD = function () { D.circ(mtx, mty, cs * 0.08, 'rgba(125,255,138,0.8)'); }; if (!(Z.glSprite && Z.glSprite('hmv|' + Math.round(cs * 4), mtx, mty, cs * 0.2, cs * 0.2, cs * 0.1, cs * 0.1, mtD))) mtD(); }   // 2.13: в пачке — готовым кадром
+  if (H.moving) { D.circ(X(H.tx), Y(H.ty), cs * 0.08, 'rgba(125,255,138,0.8)'); }
   // готовность фирменного приёма — дуга под ногами, горит, когда готов
   if (!Z.promoClean) {   // 2.11.5: в промо-съёмке без индикаторов
-  var up = H.ready ? 1 : H.ult === undefined ? 0 : Math.max(0, Math.min(1, 1 - H.ult / 14));
-  // 2.13: в пачке WebGL2 (v32gl) дуга — готовым кадром: заполнение 48 ступенями, мерцание готового приёма — 8
-  var ulA = up >= 1 ? (Z.glOn && Z.glOn() ? 0.6 + 0.4 * Math.sin(Math.round(((Z.time * 6) % (Math.PI * 2)) / (Math.PI / 4)) * Math.PI / 4) : 0.6 + 0.4 * Math.sin(Z.time * 6)) : 0, upq = Z.glOn && Z.glOn() ? Math.round(up * 48) / 48 : up;
-  var ulD = function () { ctx = D.ctx; ctx.beginPath(); ctx.ellipse(x, y + cs * 0.02, cs * 0.34, cs * 0.13, 0, -Math.PI / 2, -Math.PI / 2 + upq * Math.PI * 2); ctx.strokeStyle = up >= 1 ? 'rgba(255,213,74,' + ulA + ')' : Z.ALLIES[H.type].col; ctx.lineWidth = Math.max(2, cs * 0.05); ctx.stroke(); }, mc = ctx;
-  if (!(Z.glSprite && Z.glSprite(['hult', H.type, Math.round(upq * 48), up >= 1 ? ulA.toFixed(2) : '', Math.round(cs * 4)].join('|'), x, y + cs * 0.02, cs * 0.8, cs * 0.4, cs * 0.4, cs * 0.2, ulD))) ulD();
-  ctx = mc;
+  var up = H.ready ? 1 : H.ult === undefined ? 0 : Math.max(0, Math.min(1, 1 - H.ult / 14)); ctx.beginPath(); ctx.ellipse(x, y + cs * 0.02, cs * 0.34, cs * 0.13, 0, -Math.PI / 2, -Math.PI / 2 + up * Math.PI * 2); ctx.strokeStyle = up >= 1 ? 'rgba(255,213,74,' + (0.6 + 0.4 * Math.sin(Z.time * 6)) + ')' : Z.ALLIES[H.type].col; ctx.lineWidth = Math.max(2, cs * 0.05); ctx.stroke();
   }
-  if (H.atk > 0) { ctx.globalAlpha = H.atk / 0.3 * 0.5; var akD = function () { D.circ(x, y - cs * 0.3, cs * 0.5, '#dff4ff'); }; if (!(Z.glSprite && Z.glSprite('hak|' + Math.round(cs * 4), x, y - cs * 0.3, cs * 1.1, cs * 1.1, cs * 0.55, cs * 0.55, akD))) akD(); ctx.globalAlpha = 1; }   // 2.13: прозрачность — при переносе кадра
+  if (H.atk > 0) { ctx.globalAlpha = H.atk / 0.3 * 0.5; D.circ(x, y - cs * 0.3, cs * 0.5, '#dff4ff'); ctx.globalAlpha = 1; }
   if (H.hitT > 0) { ctx.save(); ctx.translate(Math.sin(Z.time * 60) * 1.5, 0); }
   var bob = H.moving ? Math.abs(Math.sin(H.walk)) * cs * 0.06 : Math.sin(Z.time * 2) * cs * 0.015;
   ctx.save(); ctx.translate(x, y - bob);
@@ -599,15 +591,9 @@ function drawHero(H) {
   if (H.hitT > 0) ctx.restore();
   var bw = cs * 0.7, bh = Math.max(3, cs * 0.07), bx = x - bw / 2, by = y - (Z.heroBarTop ? Z.heroBarTop(H.type, cs) : cs * 0.95) - bh;   // 2.11.5: над головой по росту героя
   if (Z.promoClean) return;
-  var hc = Z.ALLIES[H.type].col, lx = bx - Math.max(cs * 0.1, 4), lsz = Math.max(9.5, cs * 0.2);
-  // 2.13: в пачке WebGL2 — полоска прямоугольниками, уровень — готовым кадром
-  if (Z.glRect && Z.glRect(ctx, bx, by - 1, bw, bh + 2, OL)) { Z.glRect(ctx, bx - 1, by, bw + 2, bh, OL); Z.glRect(ctx, bx, by, bw * Math.max(0, H.hp / H.max), bh, hc);
-    var lvD = function () { D.text('' + H.lvl, lx, by + bh / 2, lsz, '#ffd54a', 'center', 'middle', 2); };
-    if (!Z.glSprite(['hlvl', H.lvl, Math.round(lsz * 4)].join('|'), lx, by + bh / 2, lsz * 2.4, lsz * 1.6, lsz * 1.2, lsz * 0.8, lvD)) lvD();
-    return; }
   ctx.fillStyle = OL; D.rr(bx - 1, by - 1, bw + 2, bh + 2, 2); ctx.fill();
-  ctx.fillStyle = hc; ctx.fillRect(bx, by, bw * Math.max(0, H.hp / H.max), bh);
-  D.text('' + H.lvl, lx, by + bh / 2, lsz, '#ffd54a', 'center', 'middle', 2);
+  ctx.fillStyle = Z.ALLIES[H.type].col; ctx.fillRect(bx, by, bw * Math.max(0, H.hp / H.max), bh);
+  D.text('' + H.lvl, bx - Math.max(cs * 0.1, 4), by + bh / 2, Math.max(9.5, cs * 0.2), '#ffd54a', 'center', 'middle', 2);
 }
 // стрелки пути следующей волны
 function drawPathPreview(G, cs, t) {

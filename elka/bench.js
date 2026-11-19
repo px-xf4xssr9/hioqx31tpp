@@ -22,6 +22,11 @@
     var plan = ['mg', 'tesla', 'mortar', 'snow', 'ballista', 'ice', 'mg', 'tesla', 'mortar', 'snow', 'ice', 'ballista'];
     for (var j = 0; j < sp.length && j < 28; j++) Z.buildTower(plan[j % plan.length], sp[j].c, sp[j].r);
     var ks = Object.keys(G.towers); for (var q = 0; q < ks.length; q++) { var tw = G.towers[ks[q]]; for (var u = 0; u < q % 3; u++) Z.upgradeTower(tw); }
+    // ?off=xray,weather,shadows,tracks,caust,light — выключить эффекты (те же настройки, что в меню игры)
+    (P.get('off') || '').split(',').forEach(function (k) {
+      if (k === 'xray') Z.save.fxXray = false; else if (k === 'weather') Z.save.fxWeather = false; else if (k === 'tracks') Z.save.fxTracks = false;
+      else if (k === 'caust') Z.save.fxCaust = false; else if (k === 'shadows') Z.save.shadowsOff = true; else if (k === 'light') Z.save.lightOff = true;
+    });
     Z.callWave(); Z.timeScale = 1;
     setInterval(function () { if (Z.ui.modal) Z.ui.closeModal(); if (Z.G && Z.G.phase === 'between') Z.callWave(); }, 50);
   };
@@ -56,7 +61,7 @@
       var n = ts.length, tot = now - t0, s = ts.slice().sort(function (a, b) { return a - b; }), p99 = s[Math.min(n - 1, Math.floor(n * 0.99))];
       var G = Z.G, en = G.enemies.filter(function (e) { return !e.dead; }).length, tw = Object.keys(G.towers).length;
       var lines = [
-        'Ёлка · уровень ' + (LV + 1) + ' · врагов ' + en + ' · вышек ' + tw + ' · режим ' + (SPM ? 'слой кадров WebGL2 (sp=1' + (P.get('only') === '1' ? ', only' : '') + (P.get('noup') === '1' ? ', noup' : '') + ')' : GLM ? 'WebGL2 (gl=1)' : CACHE ? 'кэши кадров для всех (cache=1)' : FAST ? 'быстрая 2.12.52' : 'обычная'),
+        'Ёлка · уровень ' + (LV + 1) + ' · врагов ' + en + ' · вышек ' + tw + (P.get('off') ? ' · выключено: ' + P.get('off') : '') + ' · режим ' + (SPM ? 'слой кадров WebGL2 (sp=1' + (P.get('only') === '1' ? ', only' : '') + (P.get('noup') === '1' ? ', noup' : '') + ')' : GLM ? 'WebGL2 (gl=1)' : CACHE ? 'кэши кадров для всех (cache=1)' : FAST ? 'быстрая 2.12.52' : 'обычная'),
         'экран ' + innerWidth + '×' + innerHeight + ' · DPR ' + (window.devicePixelRatio || 1).toFixed(2) + ' · качество ' + (Z.quality || 1).toFixed(2),
         'FPS ' + (n * 1000 / tot).toFixed(1) + ' · 1% худших ' + (1000 / p99).toFixed(1),
         'кадр ' + (tot / n).toFixed(2) + ' мс:',
