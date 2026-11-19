@@ -32,7 +32,7 @@ function atlasPut(src, sx, sy, w, h) {
   var S = null, p = null, i;
   if (cur) { p = sheetAlloc(cur, w, h); if (p) S = cur; }   // дорисовываем только в текущий лист: остальные не меняются
   if (!p) {
-    if (sheets.length < maxSheets()) { var cv = document.createElement('canvas'); cv.width = cv.height = SHEET; S = { cv: cv, ctx: cv.getContext('2d'), gen: 0, y: 0, rows: [], used: -1 }; sheets.push(S); }
+    if (sheets.length < maxSheets()) { var cv = document.createElement('canvas'); cv.width = cv.height = SHEET; cv._sheet = true; S = { cv: cv, ctx: cv.getContext('2d'), gen: 0, y: 0, rows: [], used: -1 }; sheets.push(S); }
     else {
       var now = Z.time || 0; for (i = 0; i < sheets.length; i++) if (sheets[i].used !== now && (!S || sheets[i].used < S.used)) S = sheets[i];
       if (!S) return null;   // все листы заняты кадрами этого кадра игры — этот кадр останется отдельным холстом
@@ -49,7 +49,7 @@ function blit(ctx, F, pw, ph, x, y, w, h) {
 }
 function toAtlas(F, cv, pw, ph) { var a = atlasPut(cv, 0, 0, pw, ph); if (a) { F.S = a.S; F.gen = a.gen; F.ax = a.ax; F.ay = a.ay; F.can = null; cv.width = cv.height = 0; } return F; }
 Z.atlasInfo = function () { return sheets.length; };
-function budget(cost) { var t = Z.time || 0; if (t !== bT) { bT = t; bN = 0; } if (bN >= pick(10, 4, 3)) return false; bN += cost; return true; }
+function budget(cost) { var t = Z.time || 0; if (t !== bT) { bT = t; bN = 0; } if (bN >= (Z.glOn && Z.glOn() ? pick(16, 10, 8) : pick(10, 4, 3))) return false; bN += cost; return true; }
 Z.spriteBudget = budget;
 // рисунок в память процессора, обрезка по краске, готовый кадр — маленький холст ровно по рисунку
 function build(pw, ph, sc, dx, dy, draw) {
@@ -174,8 +174,11 @@ function enemyBar(e, x, y, cs, t) {
   var ctx = D.ctx, R = cs * 0.31 * (e.size || 1);
   var hop = e.air ? Math.sin(t * 2 + (e.ph || 0)) * R * 0.15 : Math.abs(Math.sin(e.walk || 0)) * R * (e.vehicle ? 0.05 : 0.18);
   var bw = R * 1.8, bh = Math.max(3, R * 0.16), bx = x - bw / 2, tb = Z.enemyBarTop ? Z.enemyBarTop(e, cs) : null, by = tb != null ? y - tb - bh - hop : y - R * (e.air ? 4.2 : 2.3) - hop;
-  ctx.fillStyle = D.OL || '#1b2448'; D.rr(bx - 1, by - 1, bw + 2, bh + 2, 2); ctx.fill();
-  ctx.fillStyle = e.vehicle ? '#ffb347' : '#ff5a5f'; ctx.fillRect(bx, by, bw * Math.max(0, e.hp / e.max), bh);
+  var ol = D.OL || '#1b2448', fc = e.vehicle ? '#ffb347' : '#ff5a5f';
+  // 2.13: в пачке WebGL2 (v32gl) — прямоугольниками; рамка со скруглением 2 — крест из двух прямоугольников
+  if (Z.glRect && Z.glRect(ctx, bx, by - 1, bw, bh + 2, ol)) { Z.glRect(ctx, bx - 1, by, bw + 2, bh, ol); Z.glRect(ctx, bx, by, bw * Math.max(0, e.hp / e.max), bh, fc); return; }
+  ctx.fillStyle = ol; D.rr(bx - 1, by - 1, bw + 2, bh + 2, 2); ctx.fill();
+  ctx.fillStyle = fc; ctx.fillRect(bx, by, bw * Math.max(0, e.hp / e.max), bh);
 }
 var cosT = -1, cosS = '';
 function cosSig() { if (cosT !== Z.time) { cosT = Z.time; cosS = (Z.save && Z.save.cos && JSON.stringify(Z.save.cos)) || ''; } return cosS; }
@@ -185,7 +188,7 @@ function cosSig() { if (cosT !== Z.time) { cosT = Z.time; cosS = (Z.save && Z.sa
 // новых кадров строится не больше 3 за кадр, память кадров — не больше ~32 МБ. Включено, пока идёт сравнение, только в
 // тестовой «быстрой» версии (window.__FAST); после проверки — для всех.
 var CROWD_PX = 8e6, crowdOn = false, crowdT = -1, cbT = -1, cbN = 0;
-function crowdBudget() { var t = Z.time || 0; if (t !== cbT) { cbT = t; cbN = 0; } if (cbN >= 3) return false; cbN++; return true; }
+function crowdBudget() { var t = Z.time || 0; if (t !== cbT) { cbT = t; cbN = 0; } if (cbN >= (Z.glOn && Z.glOn() ? 8 : 3)) return false; cbN++; return true; }
 function crowd() {
   if (!Z.fastDraw()) return false;
   var t = Z.time || 0, G = Z.G;
@@ -223,16 +226,21 @@ Z.enemySprite = function (e, ex, ey, cs) {
 // Стоящая вышка не перерисовывается вовсе; поворачивающаяся берёт готовые кадры по углу.
 Z.towerSprite = function (tw, tx0, ty0, cs, onSt, padDraw) {
   var G = Z.G; if (off() || !G || !Z.ui || Z.ui.screen !== 'level' || zooming(cs) || tw.build > 0 || tw.pop > 0 || tw.hitT > 0) return false;
-  if (tw.recoil > 0.02 || tw.firing) return false;   // стреляющая вышка — по-старому (вспышка, отдача и стволы меняются слишком часто для общих кадров)
+  var glm = Z.glOn && Z.glOn();
+  if (!glm && (tw.recoil > 0.02 || tw.firing)) return false;   // стреляющая вышка — по-старому (вспышка, отдача и стволы меняются слишком часто для общих кадров)
+  // 2.13: в пачке WebGL2 кадры дешёвые — и у стреляющей вышки: отдача 5 ступенями, вспышка ствола — отдельный кадр
+  var rb = glm ? Math.round(Math.min(1, Math.max(0, (tw.recoil || 0) / 0.12)) * 4) : 0, fl = glm && tw.firing && Math.sin(Z.time * 60) > 0 ? 1 : 0;
   var NA = 32, tau = Math.PI * 2, a = ((tw.ang || 0) % tau + tau) % tau, ab = Math.floor(a / tau * NA) % NA, ang = (ab + 0.5) / NA * tau;
   var NS = 16, sb = tw.spin ? Math.floor(((tw.spin % tau) + tau) % tau / tau * NS) % NS : 0, spin = tw.spin ? (sb + 0.5) / NS * tau : 0;   // стволы пулемёта: 16 положений по кругу
   var gN = tw.lvl >= 5 ? 6 : 1, gb = gN > 1 ? Math.floor(((Z.time * 4) % tau + tau) % tau / tau * gN) % gN : 0, gt = gN > 1 ? (gb + 0.5) / gN * tau / 4 : 7.1;
   var key = ['tw', tw.type, tw.lvl, tw.branch || '', Math.round((tw.hp || 1) / (tw.max || 1) * 10), cs.toFixed(1), (Z.save.skins && Z.save.skins.twT && Z.save.skins.twT[tw.type]) || '', onSt ? 1 : 0, cosSig(), ab, gb,
-    tw.stun > 0 ? 1 : 0, sb].join('|');
+    tw.stun > 0 ? 1 : 0, sb, rb, fl].join('|');
   var ok = Z.sharedSprite(key, tx0, ty0, cs * 1.8, cs * 2.3, cs * 0.9, cs * 1.9, function () {
-    var sv = { ang: tw.ang, recoil: tw.recoil, spin: tw.spin, time: Z.time };
-    tw.ang = ang; tw.recoil = 0; if (tw.spin) tw.spin = spin; Z.time = gt;
-    try { padDraw(D.ctx); D.tower(tw, tx0, ty0, cs * 1.18, Z.time); } finally { tw.ang = sv.ang; tw.recoil = sv.recoil; tw.spin = sv.spin; Z.time = sv.time; }
+    var sv = { ang: tw.ang, recoil: tw.recoil, spin: tw.spin, firing: tw.firing, time: Z.time };
+    // вспышка ствола видна, когда sin(60·t) > 0: время кадра сдвигается не больше чем на 0,1 с
+    var ft = fl ? gt + ((((Math.PI / 2 - gt * 60) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) / 60 : gt;
+    tw.ang = ang; tw.recoil = rb / 4 * 0.12; tw.firing = !!fl; if (tw.spin) tw.spin = spin; Z.time = ft;
+    try { padDraw(D.ctx); D.tower(tw, tx0, ty0, cs * 1.18, Z.time); } finally { tw.ang = sv.ang; tw.recoil = sv.recoil; tw.spin = sv.spin; tw.firing = sv.firing; Z.time = sv.time; }
   });
   if (!ok) { padDraw(D.ctx); D.tower(tw, tx0, ty0, cs * 1.18, Z.time); }   // кадра ещё нет — в этот кадр напрямую
   return true;

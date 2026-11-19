@@ -5,8 +5,9 @@
 (function () {
   'use strict';
   var P = new URLSearchParams(location.search);
-  var LV = Math.max(1, +P.get('lvl') || 35) - 1, N = +P.get('n') || 84, FAST = P.get('fast') !== '0', DUR = 15000;
+  var LV = Math.max(1, +P.get('lvl') || 35) - 1, N = +P.get('n') || 84, GLM = P.get('gl') === '1', FAST = GLM || P.get('fast') !== '0', CACHE = GLM || P.get('cache') === '1', DUR = 15000;
   window.__FAST = FAST;
+  if (CACHE && !GLM) { var ivc = setInterval(function () { if (window.Z && Z.cachesOff) { Z.cachesOff = function () { return false; }; clearInterval(ivc); } }, 5); }
   var panel = document.createElement('div');
   panel.style.cssText = 'position:fixed;left:6px;right:6px;bottom:6px;z-index:99999;background:rgba(10,14,30,.88);color:#fff;font:13px/1.35 monospace;padding:8px;border-radius:8px;white-space:pre-wrap;pointer-events:auto';
   panel.textContent = 'Замер: загрузка игры…';
@@ -47,7 +48,7 @@
   function measure() {
     var upd = { v: 0 }, rnd = { v: 0 }, post = { v: 0 };
     wrap(Z, 'update', upd); wrap(Z.ui, 'render', rnd); if (Z.post) wrap(Z, 'post', post);
-    var ts = [], t0 = performance.now(), last = t0, alive0 = 0;
+    var ts = [], t0 = performance.now(), last = t0, alive0 = 0; if (Z.glStats) Z.glStats();
     panel.textContent = 'Замер идёт 15 с — не трогай экран…';
     function f(now) {
       ts.push(now - last); last = now;
@@ -55,7 +56,7 @@
       var n = ts.length, tot = now - t0, s = ts.slice().sort(function (a, b) { return a - b; }), p99 = s[Math.min(n - 1, Math.floor(n * 0.99))];
       var G = Z.G, en = G.enemies.filter(function (e) { return !e.dead; }).length, tw = Object.keys(G.towers).length;
       var lines = [
-        'Ёлка ' + (window.__ELKA_VER || '') + ' · уровень ' + (LV + 1) + ' · врагов ' + en + ' · вышек ' + tw + ' · быстрая ' + (FAST ? 'да' : 'нет'),
+        'Ёлка · уровень ' + (LV + 1) + ' · врагов ' + en + ' · вышек ' + tw + ' · режим ' + (GLM ? 'WebGL2 (gl=1)' : CACHE ? 'кэши кадров для всех (cache=1)' : FAST ? 'быстрая 2.12.52' : 'обычная'),
         'экран ' + innerWidth + '×' + innerHeight + ' · DPR ' + (window.devicePixelRatio || 1).toFixed(2) + ' · качество ' + (Z.quality || 1).toFixed(2),
         'FPS ' + (n * 1000 / tot).toFixed(1) + ' · 1% худших ' + (1000 / p99).toFixed(1),
         'кадр ' + (tot / n).toFixed(2) + ' мс:',
@@ -65,6 +66,7 @@
         '  ожидание видеокарты и браузера ' + Math.max(0, tot / n - (upd.v + rnd.v + post.v) / n).toFixed(2) + ' мс',
         navigator.userAgent
       ];
+      if (GLM && Z.glStats) { var gs = Z.glStats(); lines.splice(8, 0, 'WebGL2: ' + (Z.glOn() ? 'да' : 'НЕТ') + ' · переносов пачки на холст ' + gs.flush.toFixed(1) + ' · кадров в пачках ' + gs.inst.toFixed(0) + ' · живых вызовов ' + gs.live.toFixed(0) + ' · заливок текстур ' + gs.up.toFixed(2) + ' (' + gs.upMpx.toFixed(2) + ' Мпикс) · текстур ' + gs.tex); }
       panel.textContent = lines.join('\n');
       var b = document.createElement('button'); b.textContent = 'Скопировать результат'; b.style.cssText = 'display:block;margin-top:6px;padding:8px 12px;font:14px sans-serif';
       b.onclick = function () { var t = lines.join('\n'); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(function () { b.textContent = 'Скопировано'; }, function () { prompt('Скопируй:', t); }); };
