@@ -1,15 +1,15 @@
 {
  "babylon": {
-  "raw": 1545550,
-  "brotli": 278987,
+  "raw": 1545837,
+  "brotli": 278686,
   "wasm_br": 0,
-  "total_br": 281188
+  "total_br": 280887
  },
  "babylon-mt": {
-  "raw": 1550278,
-  "brotli": 280223,
+  "raw": 1550565,
+  "brotli": 279925,
   "wasm_br": 0,
-  "total_br": 282424
+  "total_br": 282126
  },
  "bench3d": {
   "raw": 14650138,
@@ -18,22 +18,22 @@
   "total_br": 3250585
  },
  "lite3d": {
-  "raw": 997721,
-  "brotli": 217717,
-  "wasm_br": 212164,
-  "total_br": 219918
+  "raw": 998971,
+  "brotli": 217921,
+  "wasm_br": 212354,
+  "total_br": 220122
  },
  "lite3d-mt": {
-  "raw": 1010220,
-  "brotli": 227344,
+  "raw": 1011471,
+  "brotli": 228069,
   "wasm_br": 7056,
-  "total_br": 229545
+  "total_br": 230270
  },
  "lite3d-simd": {
-  "raw": 979217,
-  "brotli": 216237,
-  "wasm_br": 210690,
-  "total_br": 218438
+  "raw": 980468,
+  "brotli": 216965,
+  "wasm_br": 211375,
+  "total_br": 219166
  },
  "min2d": {
   "raw": 12156161,
@@ -42,9 +42,9 @@
   "total_br": 2786851
  },
  "three": {
-  "raw": 553581,
-  "brotli": 115788,
+  "raw": 553828,
+  "brotli": 115959,
   "wasm_br": 0,
-  "total_br": 117989
+  "total_br": 118160
  }
 }

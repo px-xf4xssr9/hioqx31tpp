@@ -120,6 +120,9 @@ function __wbg_get_imports() {
         __wbg_end_7e8feae2ea2a5e40: function(arg0, arg1, arg2, arg3, arg4) {
             gengineMt.end(getArrayF32FromWasm0(arg0, arg1), getArrayF32FromWasm0(arg2, arg3), arg4 >>> 0);
         },
+        __wbg_gengineNote_757954d0d2c87c19: function(arg0, arg1, arg2, arg3) {
+            window.gengineNote(getStringFromWasm0(arg0, arg1), getStringFromWasm0(arg2, arg3));
+        },
         __wbg_gengineParam_3feb430746b00dff: function(arg0, arg1) {
             const ret = window.gengineParam(getStringFromWasm0(arg0, arg1));
             return ret;
