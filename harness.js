@@ -52,6 +52,8 @@ window.gengineReport = (kind, value) => {
     set("check", "Контроль (шаг 640)", value.toFixed(4));
   } else if (kind === "sim_ms") {
     set("sim_ms", "  из них логика", `${value.toFixed(2)} мс`);
+  } else if (kind === "step_ms") {
+    set("step_ms", "  логика на 1 шаг", `${value.toFixed(2)} мс`);
   } else if (kind === "fps_low") {
     set("fps_low", "1% худших", `${value.toFixed(1)} FPS`);
     panel.classList.add("done");

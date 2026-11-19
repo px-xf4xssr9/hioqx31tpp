@@ -1,26 +1,32 @@
 {
  "bench3d": {
   "raw": 14650138,
-  "brotli": 3248384,
+  "brotli": 3248383,
   "wasm_br": 3235686,
-  "total_br": 3250541
+  "total_br": 3250557
  },
  "lite3d": {
-  "raw": 989852,
-  "brotli": 216033,
-  "wasm_br": 210709,
-  "total_br": 218190
+  "raw": 990978,
+  "brotli": 216509,
+  "wasm_br": 211185,
+  "total_br": 218683
+ },
+ "lite3d-simd": {
+  "raw": 972225,
+  "brotli": 214896,
+  "wasm_br": 209572,
+  "total_br": 217070
  },
  "min2d": {
   "raw": 12156161,
   "brotli": 2784650,
   "wasm_br": 2771978,
-  "total_br": 2786807
+  "total_br": 2786824
  },
  "three": {
-  "raw": 549197,
-  "brotli": 114423,
+  "raw": 549499,
+  "brotli": 114470,
   "wasm_br": 0,
-  "total_br": 116580
+  "total_br": 116644
  }
 }
