@@ -16,7 +16,8 @@ if (!ON) return;
 window.__FAST = true;
 Z.cachesOff = function () { return false; };
 Z.atlasOn = true;
-var ONLY = /[?&]only=1(&|$)/.test(location.search);   // замер «пола»: живые части объектов и эффекты не рисуются вовсе
+var ONLY = /[?&]only=1(&|$)/.test(location.search);
+var NOUP = /[?&]noup=1(&|$)/.test(location.search);   // замер: после разогрева текстуры не перезаливаются (картинка может устареть) — сколько стоят сами заливки   // замер «пола»: живые части объектов и эффекты не рисуются вовсе
 
 // ---------- версии холстов (как в v32gl): рисунок в холст меняет его версию; лист кадров — грязная область ----------
 var P2 = CanvasRenderingContext2D.prototype;
@@ -66,7 +67,7 @@ gl.bindVertexArray(null);
 var white = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, white); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([255, 255, 255, 255]));
 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 
-var TEX = new Map(), frameNo = 0, st = { inst: 0, up: 0, upPx: 0, live: 0 }, S = { inst: 0, up: 0, upPx: 0, live: 0, frames: 0, gl: 0 };
+var TEX = new Map(), frameNo = 0, st = { inst: 0, up: 0, upPx: 0, live: 0, upMs: 0, glMs: 0 }, S = { inst: 0, up: 0, upPx: 0, live: 0, frames: 0, gl: 0, upMs: 0, glMs: 0 };
 function srcSize(s) { return s.naturalWidth !== undefined ? [s.naturalWidth, s.naturalHeight] : [s.width, s.height]; }
 function capturable(s) {
   if (s instanceof HTMLCanvasElement) { if (s === cvGL || s === cvTop || s === cvMain) return false; var a = s.width * s.height; if (!(a > 0)) return false; if (s._sheet || a <= 360 * 360) return true; var T = TEX.get(s); return a <= 2048 * 2048 && !(T && T.dyn); }
@@ -80,6 +81,8 @@ function texFor(s) {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); }
   T.used = frameNo;
   if (T.ver === ver) return T.t;
+  if (NOUP && T.ver >= 0 && !(Z.spWarm && Z.spWarm())) return T.t;
+  var tU = performance.now();
   gl.bindTexture(gl.TEXTURE_2D, T.t); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
   var dr = s._sheet && T.ver >= 0 && T.w === s.width && T.h === s.height ? s._dirty : null;
   if (dr) {
@@ -92,7 +95,7 @@ function texFor(s) {
     var sz = srcSize(s); st.upPx += sz[0] * sz[1];
     if (!s._sheet && T.ver >= 0 && frameNo - T.upF < 30) T.dyn = true;
   }
-  s._dirty = null; T.ver = ver; T.upF = frameNo; st.up++;
+  s._dirty = null; T.ver = ver; T.upF = frameNo; st.up++; st.upMs += performance.now() - tU;
   return T.t;
 }
 function gcTex() { TEX.forEach(function (T, s) { if (frameNo - T.used > 300) { gl.deleteTexture(T.t); TEX.delete(s); } }); }
@@ -161,7 +164,7 @@ Z.glBegin = function (c) {
 Z.glEnd = function (c) {
   if (!inPass || c !== main) return;
   uninstall(c); inPass = false;
-  var W = cvGL.width, H = cvGL.height;
+  var tG = performance.now(), W = cvGL.width, H = cvGL.height;
   gl.viewport(0, 0, W, H); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
   if (n) {
     gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
@@ -172,9 +175,9 @@ Z.glEnd = function (c) {
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, R.count); S.gl++; }
     gl.bindVertexArray(null);
   }
-  glDrawn = true;
+  glDrawn = true; st.glMs += performance.now() - tG;
   frameNo++; if (frameNo % 120 === 0) gcTex();
-  S.inst += st.inst; S.up += st.up; S.upPx += st.upPx; S.live += st.live; S.frames++; st.inst = st.up = st.upPx = st.live = 0;
+  S.inst += st.inst; S.up += st.up; S.upPx += st.upPx; S.live += st.live; S.upMs += st.upMs; S.glMs += st.glMs; S.frames++; st.inst = st.up = st.upPx = st.live = st.upMs = st.glMs = 0;
 };
 // после прохода объектов всё остальное (снаряды, эффекты, тексты, интерфейс) — на верхний холст: та же точка отсчёта и обрезка
 Z.spTop = function (c, vp, om) {
@@ -195,5 +198,5 @@ Z.ui.render = function (c, w, h) {
   try { return oRender.apply(this, arguments); }
   finally { if (!glDrawn) { gl.viewport(0, 0, cvGL.width, cvGL.height); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT); } }
 };
-Z.glStats = function () { var f = Math.max(1, S.frames), r = { flush: 0, gl: S.gl / f, inst: S.inst / f, up: S.up / f, upMpx: S.upPx / f / 1e6, live: S.live / f, tex: TEX.size }; S.inst = S.up = S.upPx = S.live = S.frames = S.gl = 0; return r; };
+Z.glStats = function () { var f = Math.max(1, S.frames), r = { flush: 0, gl: S.gl / f, inst: S.inst / f, up: S.up / f, upMpx: S.upPx / f / 1e6, live: S.live / f, tex: TEX.size, upMs: S.upMs / f, glMs: S.glMs / f }; S.inst = S.up = S.upPx = S.live = S.frames = S.gl = S.upMs = S.glMs = 0; return r; };
 })();
