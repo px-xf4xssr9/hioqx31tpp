@@ -117,9 +117,8 @@ function __wbg_get_imports() {
         __wbg_enable_e955d456ef6b93f7: function(arg0, arg1) {
             arg0.enable(arg1 >>> 0);
         },
-        __wbg_end_9258ed43a926bc0b: function(arg0, arg1, arg2, arg3, arg4) {
-            const ret = gengineMt.end(getArrayF32FromWasm0(arg0, arg1), getArrayF32FromWasm0(arg2, arg3), arg4 >>> 0);
-            return ret;
+        __wbg_end_7e8feae2ea2a5e40: function(arg0, arg1, arg2, arg3, arg4) {
+            gengineMt.end(getArrayF32FromWasm0(arg0, arg1), getArrayF32FromWasm0(arg2, arg3), arg4 >>> 0);
         },
         __wbg_gengineNote_757954d0d2c87c19: function(arg0, arg1, arg2, arg3) {
             window.gengineNote(getStringFromWasm0(arg0, arg1), getStringFromWasm0(arg2, arg3));
