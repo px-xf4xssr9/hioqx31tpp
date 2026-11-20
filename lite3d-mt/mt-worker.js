@@ -1,9 +1,9 @@
 // Воркер lite3d-mt: ждёт шага, копирует вход из общей памяти в память WASM (crowdw),
 // берёт порции юнитов через общий счётчик, считает и пишет силу обратно.
-// Ядро — то же crowdk, что в Rust.
+// Ядро — то же crowdk, что в Rust. hang ≥ 0 — проверка страховки: на этом шаге воркер зависает.
 const EPOCH = 0, DONE = 1, N = 2, G = 3, NEXT = 4, CHUNKS = 5;
 
-onmessage = async ({ data: { mod, S, w, CAP, CELLS } }) => {
+onmessage = async ({ data: { mod, S, w, CAP, CELLS, hang } }) => {
   const { exports: k } = await WebAssembly.instantiate(mod, {});
   k.setup(CAP, CELLS);
   const mem = k.memory.buffer;
@@ -12,10 +12,11 @@ onmessage = async ({ data: { mod, S, w, CAP, CELLS } }) => {
   const ox = new Float32Array(mem, k.ptr_out_x(), CAP), oz = new Float32Array(mem, k.ptr_out_z(), CAP);
   const { ctrl, owner, CH } = S;
   postMessage("ready");
-  let seen = Atomics.load(ctrl, EPOCH);
+  let seen = Atomics.load(ctrl, EPOCH), step = 0;
   for (;;) {
     Atomics.wait(ctrl, EPOCH, seen);
     seen = Atomics.load(ctrl, EPOCH);
+    if (step++ === hang) for (;;) { /* имитация зависания */ }
     const n = ctrl[N], g = ctrl[G], chunks = ctrl[CHUNKS];
     let copied = false;
     for (let c; (c = Atomics.add(ctrl, NEXT, 1)) < chunks;) {
