@@ -1,20 +1,20 @@
 {
  "arena": {
-  "raw": 985525,
-  "brotli": 212024,
-  "wasm_br": 204444,
-  "total_br": 214225
+  "raw": 987373,
+  "brotli": 211829,
+  "wasm_br": 204250,
+  "total_br": 214030
  },
  "lite3d": {
-  "raw": 1002893,
-  "brotli": 219034,
-  "wasm_br": 213464,
-  "total_br": 221235
+  "raw": 1018446,
+  "brotli": 221590,
+  "wasm_br": 215996,
+  "total_br": 223791
  },
  "lite3d-mt": {
-  "raw": 1015952,
-  "brotli": 228989,
+  "raw": 1034338,
+  "brotli": 232237,
   "wasm_br": 7056,
-  "total_br": 231190
+  "total_br": 234438
  }
 }
