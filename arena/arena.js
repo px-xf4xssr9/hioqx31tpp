@@ -13,6 +13,10 @@ function __wbg_get_imports() {
             getDataViewMemory0().setInt32((arg0 >>> 0) + 4 * 1, len1, true);
             getDataViewMemory0().setInt32((arg0 >>> 0) + 4 * 0, ptr1, true);
         },
+        __wbg___wbindgen_is_null_c22311b1cc228e3a: function(arg0) {
+            const ret = arg0 === null;
+            return ret;
+        },
         __wbg___wbindgen_is_undefined_be5b34249ff1fc15: function(arg0) {
             const ret = arg0 === undefined;
             return ret;
@@ -23,11 +27,17 @@ function __wbg_get_imports() {
         __wbg__wbg_cb_unref_09736879a3f67559: function(arg0) {
             arg0._wbg_cb_unref();
         },
+        __wbg_activeTexture_89cef8c297ad0698: function(arg0, arg1) {
+            arg0.activeTexture(arg1 >>> 0);
+        },
         __wbg_attachShader_3ed301cc92db59f6: function(arg0, arg1, arg2) {
             arg0.attachShader(arg1, arg2);
         },
         __wbg_bindBuffer_cbc9075f76fffa51: function(arg0, arg1, arg2) {
             arg0.bindBuffer(arg1 >>> 0, arg2);
+        },
+        __wbg_bindTexture_a23350e1b573ddfd: function(arg0, arg1, arg2) {
+            arg0.bindTexture(arg1 >>> 0, arg2);
         },
         __wbg_bindVertexArray_cc64c48bf67ab8d4: function(arg0, arg1) {
             arg0.bindVertexArray(arg1);
@@ -70,10 +80,18 @@ function __wbg_get_imports() {
             const ret = arg0.createShader(arg1 >>> 0);
             return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
         },
+        __wbg_createTexture_3287f26407473071: function(arg0) {
+            const ret = arg0.createTexture();
+            return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
+        },
         __wbg_createVertexArray_1293d2ffa8346be2: function(arg0) {
             const ret = arg0.createVertexArray();
             return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
         },
+        __wbg_deleteProperty_3ad7a085da623822: function() { return handleError(function (arg0, arg1) {
+            const ret = Reflect.deleteProperty(arg0, arg1);
+            return ret;
+        }, arguments); },
         __wbg_devicePixelRatio_90ee4024cee5d5f4: function(arg0) {
             const ret = arg0.devicePixelRatio;
             return ret;
@@ -85,11 +103,17 @@ function __wbg_get_imports() {
         __wbg_drawElementsInstanced_3240c0c168d6af87: function(arg0, arg1, arg2, arg3, arg4, arg5) {
             arg0.drawElementsInstanced(arg1 >>> 0, arg2, arg3 >>> 0, arg4, arg5);
         },
+        __wbg_drawElements_d76df94ac144b73b: function(arg0, arg1, arg2, arg3, arg4) {
+            arg0.drawElements(arg1 >>> 0, arg2, arg3 >>> 0, arg4);
+        },
         __wbg_enableVertexAttribArray_eeecc6185af24227: function(arg0, arg1) {
             arg0.enableVertexAttribArray(arg1 >>> 0);
         },
         __wbg_enable_e955d456ef6b93f7: function(arg0, arg1) {
             arg0.enable(arg1 >>> 0);
+        },
+        __wbg_generateMipmap_41bc066b35a6cd3d: function(arg0, arg1) {
+            arg0.generateMipmap(arg1 >>> 0);
         },
         __wbg_gengineFx_d4356505b46b8c51: function(arg0, arg1, arg2) {
             window.gengineFx(getStringFromWasm0(arg0, arg1), arg2);
@@ -145,6 +169,10 @@ function __wbg_get_imports() {
             const ret = arg0.getUniformLocation(arg1, getStringFromWasm0(arg2, arg3));
             return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
         },
+        __wbg_get_2080c49015e35254: function() { return handleError(function (arg0, arg1) {
+            const ret = Reflect.get(arg0, arg1);
+            return ret;
+        }, arguments); },
         __wbg_height_ac6f1c3f49c13fe2: function(arg0) {
             const ret = arg0.height;
             return ret;
@@ -153,6 +181,26 @@ function __wbg_get_imports() {
             let result;
             try {
                 result = arg0 instanceof HTMLCanvasElement;
+            } catch (_) {
+                result = false;
+            }
+            const ret = result;
+            return ret;
+        },
+        __wbg_instanceof_HtmlImageElement_f22acd64d72ae23a: function(arg0) {
+            let result;
+            try {
+                result = arg0 instanceof HTMLImageElement;
+            } catch (_) {
+                result = false;
+            }
+            const ret = result;
+            return ret;
+        },
+        __wbg_instanceof_Uint8Array_d7aeb0dcb3108fea: function(arg0) {
+            let result;
+            try {
+                result = arg0 instanceof Uint8Array;
             } catch (_) {
                 result = false;
             }
@@ -179,12 +227,19 @@ function __wbg_get_imports() {
             const ret = result;
             return ret;
         },
+        __wbg_length_186163212ffe79c3: function(arg0) {
+            const ret = arg0.length;
+            return ret;
+        },
         __wbg_linkProgram_99848b73f1ebab5f: function(arg0, arg1) {
             arg0.linkProgram(arg1);
         },
         __wbg_new_cd4348290afae586: function() {
             const ret = new Object();
             return ret;
+        },
+        __wbg_prototypesetcall_13162965d1fe7aa3: function(arg0, arg1, arg2) {
+            Uint8Array.prototype.set.call(getArrayU8FromWasm0(arg0, arg1), arg2);
         },
         __wbg_requestAnimationFrame_9ba49d36a19ca83c: function() { return handleError(function (arg0, arg1) {
             const ret = arg0.requestAnimationFrame(arg1);
@@ -219,8 +274,23 @@ function __wbg_get_imports() {
             const ret = typeof window === 'undefined' ? undefined : window;
             return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
         },
+        __wbg_texImage2D_020b851378791551: function() { return handleError(function (arg0, arg1, arg2, arg3, arg4, arg5, arg6) {
+            arg0.texImage2D(arg1 >>> 0, arg2, arg3, arg4 >>> 0, arg5 >>> 0, arg6);
+        }, arguments); },
+        __wbg_texParameteri_e24e4fdc17153838: function(arg0, arg1, arg2, arg3) {
+            arg0.texParameteri(arg1 >>> 0, arg2 >>> 0, arg3);
+        },
+        __wbg_uniform1f_fe417acc7c7a1dc5: function(arg0, arg1, arg2) {
+            arg0.uniform1f(arg1, arg2);
+        },
+        __wbg_uniform1i_778a02a48ecdceed: function(arg0, arg1, arg2) {
+            arg0.uniform1i(arg1, arg2);
+        },
         __wbg_uniform3fv_58fa948c65cb5f6c: function(arg0, arg1, arg2, arg3) {
             arg0.uniform3fv(arg1, getArrayF32FromWasm0(arg2, arg3));
+        },
+        __wbg_uniform4fv_d3afea28181f5342: function(arg0, arg1, arg2, arg3) {
+            arg0.uniform4fv(arg1, getArrayF32FromWasm0(arg2, arg3));
         },
         __wbg_uniformMatrix4fv_edd2b51dbb1caffd: function(arg0, arg1, arg2, arg3, arg4) {
             arg0.uniformMatrix4fv(arg1, arg2 !== 0, getArrayF32FromWasm0(arg3, arg4));

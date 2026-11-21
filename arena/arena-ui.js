@@ -27,6 +27,13 @@ const el = (id, html = "") => {
   document.body.appendChild(d);
   return d;
 };
+// Руки героя: модель со скинингом и текстура; Rust забирает их из window.gengineHands.
+Promise.all([
+  fetch(new URL("hands.ghnd", location.href)).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(r.status))),
+  new Promise((ok, fail) => { const i = new Image(); i.onload = () => ok(i); i.onerror = fail; i.src = "hands.jpg"; }),
+]).then(([bin, img]) => (window.gengineHands = { bin: new Uint8Array(bin), img }))
+  .catch((e) => console.warn("gengine: руки не загрузились", e));
+
 addEventListener("DOMContentLoaded", () => {
   const st = document.createElement("style"); st.textContent = css; document.head.appendChild(st);
   for (const id of ["vig", "cross", "hitm", "stats", "dead"]) el(id);
