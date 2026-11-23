@@ -1,9 +1,9 @@
 {
  "arena": {
-  "raw": 1027560,
-  "brotli": 224817,
-  "wasm_br": 215769,
-  "total_br": 227018
+  "raw": 1029703,
+  "brotli": 225593,
+  "wasm_br": 216513,
+  "total_br": 227794
  },
  "babylon": {
   "raw": 1546424,
@@ -19,9 +19,9 @@
  },
  "bench3d": {
   "raw": 14659116,
-  "brotli": 3248628,
+  "brotli": 3248631,
   "wasm_br": 3235814,
-  "total_br": 3250829
+  "total_br": 3250832
  },
  "lite3d": {
   "raw": 1018382,
@@ -31,15 +31,15 @@
  },
  "lite3d-mt": {
   "raw": 1034339,
-  "brotli": 232406,
+  "brotli": 232405,
   "wasm_br": 7056,
-  "total_br": 234607
+  "total_br": 234606
  },
  "lite3d-simd": {
   "raw": 1000104,
-  "brotli": 220232,
+  "brotli": 220211,
   "wasm_br": 214630,
-  "total_br": 222433
+  "total_br": 222412
  },
  "min2d": {
   "raw": 12168379,
