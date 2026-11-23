@@ -4,7 +4,7 @@
 // ПК: клик — захват мыши, WASD/стрелки, мышь — обзор, ЛКМ — огонь.
 
 const TOUCH_SENS = 0.0055, MOUSE_SENS = 0.0025, STICK_PX = 60;
-const S = { right: 0, forward: 0, dx: 0, dy: 0, fire: 0, restart: 0, cast: 0 };
+const S = { right: 0, forward: 0, dx: 0, dy: 0, fire: 0, restart: 0, cast: 0, castHeld: 0 };
 const keys = new Set();
 
 const css = `
@@ -47,8 +47,10 @@ function setup() {
   const $ = (id) => document.getElementById(id);
   const canvas = $("bevy"), stick = $("stick"), knob = $("knob"), dead = $("dead");
   // Кнопка силы (сыворотка); на ПК — Q или правая кнопка мыши.
-  $("cast").addEventListener("touchstart", (e) => { e.preventDefault(); S.cast = 1; }, { passive: false });
-  $("cast").addEventListener("mousedown", () => (S.cast = 1));
+  $("cast").addEventListener("touchstart", (e) => { e.preventDefault(); S.cast = 1; S.castHeld = 1; }, { passive: false });
+  $("cast").addEventListener("touchend", () => (S.castHeld = 0));
+  $("cast").addEventListener("touchcancel", () => (S.castHeld = 0));
+  $("cast").addEventListener("mousedown", () => { S.cast = 1; S.castHeld = 1; });
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
   let hp = 100, kills = 0, hitT = 0, hurt = 0;
   const stats = () => ($("stats").textContent = `❤ ${Math.ceil(hp)}   ☠ ${kills}`);
@@ -98,10 +100,10 @@ function setup() {
     if (dead.style.display === "flex") { S.restart = 1; return; }
     if (document.pointerLockElement !== canvas) canvas.requestPointerLock?.();
     else if (e.button === 0) S.fire = 1;
-    else if (e.button === 2) S.cast = 1;
+    else if (e.button === 2) { S.cast = 1; S.castHeld = 1; }
   });
   dead.addEventListener("click", () => (S.restart = 1));
-  addEventListener("mouseup", (e) => { if (e.button === 0) S.fire = 0; });
+  addEventListener("mouseup", (e) => { if (e.button === 0) S.fire = 0; else S.castHeld = 0; });
   addEventListener("mousemove", (e) => {
     if (document.pointerLockElement !== canvas) return;
     S.dx += e.movementX * MOUSE_SENS; S.dy += e.movementY * MOUSE_SENS;
@@ -111,11 +113,11 @@ function setup() {
     S.right = (k("KeyD", "ArrowRight") ? 1 : 0) - (k("KeyA", "ArrowLeft") ? 1 : 0);
     S.forward = (k("KeyW", "ArrowUp") ? 1 : 0) - (k("KeyS", "ArrowDown") ? 1 : 0);
   };
-  addEventListener("keydown", (e) => { keys.add(e.code); keyAxis(); if (e.code === "KeyQ") S.cast = 1; if (e.code === "Space" && dead.style.display === "flex") S.restart = 1; });
-  addEventListener("keyup", (e) => { keys.delete(e.code); keyAxis(); });
+  addEventListener("keydown", (e) => { keys.add(e.code); keyAxis(); if (e.code === "KeyQ" && !e.repeat) { S.cast = 1; S.castHeld = 1; } if (e.code === "Space" && dead.style.display === "flex") S.restart = 1; });
+  addEventListener("keyup", (e) => { keys.delete(e.code); keyAxis(); if (e.code === "KeyQ") S.castHeld = 0; });
 
   window.gengineInput = () => {
-    const out = new Float32Array([S.right, S.forward, S.dx, S.dy, S.fire, S.restart, S.cast]);
+    const out = new Float32Array([S.right, S.forward, S.dx, S.dy, S.fire, S.restart, S.cast, S.castHeld]);
     S.dx = S.dy = 0; S.restart = 0; S.cast = 0;
     return out;
   };
