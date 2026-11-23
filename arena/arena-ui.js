@@ -20,6 +20,7 @@ const css = `
 #dead{inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:8px;background:rgba(40,0,0,.7);font:700 26px system-ui;color:#fff;pointer-events:auto}
 #cast{right:28px;bottom:120px;width:84px;height:84px;border-radius:50%;background:radial-gradient(circle,#ffb347,#d6261e);opacity:.85;pointer-events:auto;display:flex;align-items:center;justify-content:center;font:700 13px system-ui;color:#fff;text-shadow:0 1px 2px #000}
 #stick{width:110px;height:110px;margin:-55px 0 0 -55px;border:2px solid rgba(255,255,255,.35);border-radius:50%;display:none}
+#gfx{left:12px;top:12px;padding:4px 8px;border-radius:6px;background:rgba(0,0,0,.35);font:600 12px system-ui;color:#fff;pointer-events:auto;cursor:pointer}
 #knob{left:50%;top:50%;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;background:rgba(255,255,255,.35);position:absolute}
 `;
 const el = (id, html = "") => {
@@ -28,17 +29,42 @@ const el = (id, html = "") => {
   document.body.appendChild(d);
   return d;
 };
-// Руки героя: модель со скинингом и текстура; Rust забирает их из window.gengineHands.
+// Руки героя: модель со скинингом, текстура и карта рельефа кожи (необязательна);
+// Rust забирает их из window.gengineHands.
+const loadImg = (src) => new Promise((ok, fail) => { const i = new Image(); i.onload = () => ok(i); i.onerror = fail; i.src = src; });
 Promise.all([
   fetch(new URL("hands.ghnd", location.href)).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(r.status))),
-  new Promise((ok, fail) => { const i = new Image(); i.onload = () => ok(i); i.onerror = fail; i.src = "hands.jpg"; }),
-]).then(([bin, img]) => (window.gengineHands = { bin: new Uint8Array(bin), img }))
+  loadImg("hands.jpg"),
+  loadImg("hands_n.jpg").catch(() => null),
+]).then(([bin, img, rel]) => (window.gengineHands = { bin: new Uint8Array(bin), img, ...(rel ? { rel } : {}) }))
   .catch((e) => console.warn("gengine: руки не загрузились", e));
+
+// Качество графики рук: ?q=0/1 в адресе, иначе выбор игрока (кнопка «Графика»), по умолчанию высокое.
+const Q_KEY = "gengine.q";
+const savedQ = () => { try { return localStorage.getItem(Q_KEY); } catch { return null; } };
+// (обёртка ставится после загрузки страницы: gengineParam задаёт harness.js — модуль, он выполняется позже)
+const wrapParam = () => {
+  const base = window.gengineParam;
+  window.gengineParam = (name) => {
+    const v = base ? base(name) : NaN;
+    if (name === "q" && Number.isNaN(v)) return Number(savedQ() ?? 1);
+    return v;
+  };
+};
 
 addEventListener("DOMContentLoaded", () => {
   const st = document.createElement("style"); st.textContent = css; document.head.appendChild(st);
   for (const id of ["vig", "cross", "hitm", "stats", "dead"]) el(id);
   el("cast", "СИЛА");
+  wrapParam();
+  const gfx = el("gfx");
+  const showQ = () => (gfx.textContent = `Графика: ${window.gengineParam("q") > 0.5 ? "высокая" : "простая"}`);
+  showQ();
+  gfx.addEventListener("click", (e) => {
+    e.stopPropagation();
+    try { localStorage.setItem(Q_KEY, window.gengineParam("q") > 0.5 ? "0" : "1"); } catch {}
+    showQ();
+  });
   el("stick", '<div id="knob"></div>');
   setup();
 });
