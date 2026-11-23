@@ -4,7 +4,7 @@
 // ПК: клик — захват мыши, WASD/стрелки, мышь — обзор, ЛКМ — огонь.
 
 const TOUCH_SENS = 0.0055, MOUSE_SENS = 0.0025, STICK_PX = 60;
-const S = { right: 0, forward: 0, dx: 0, dy: 0, fire: 0, restart: 0 };
+const S = { right: 0, forward: 0, dx: 0, dy: 0, fire: 0, restart: 0, cast: 0 };
 const keys = new Set();
 
 const css = `
@@ -18,6 +18,7 @@ const css = `
 #vig{inset:0;opacity:0;background:radial-gradient(ellipse at center,transparent 45%,rgba(200,0,0,.75) 100%);transition:opacity .25s}
 #stats{left:12px;bottom:12px;font:700 20px system-ui;color:#fff;text-shadow:0 1px 3px #000}
 #dead{inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:8px;background:rgba(40,0,0,.7);font:700 26px system-ui;color:#fff;pointer-events:auto}
+#cast{right:28px;bottom:120px;width:84px;height:84px;border-radius:50%;background:radial-gradient(circle,#ffb347,#d6261e);opacity:.85;pointer-events:auto;display:flex;align-items:center;justify-content:center;font:700 13px system-ui;color:#fff;text-shadow:0 1px 2px #000}
 #stick{width:110px;height:110px;margin:-55px 0 0 -55px;border:2px solid rgba(255,255,255,.35);border-radius:50%;display:none}
 #knob{left:50%;top:50%;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;background:rgba(255,255,255,.35);position:absolute}
 `;
@@ -37,6 +38,7 @@ Promise.all([
 addEventListener("DOMContentLoaded", () => {
   const st = document.createElement("style"); st.textContent = css; document.head.appendChild(st);
   for (const id of ["vig", "cross", "hitm", "stats", "dead"]) el(id);
+  el("cast", "СИЛА");
   el("stick", '<div id="knob"></div>');
   setup();
 });
@@ -44,6 +46,10 @@ addEventListener("DOMContentLoaded", () => {
 function setup() {
   const $ = (id) => document.getElementById(id);
   const canvas = $("bevy"), stick = $("stick"), knob = $("knob"), dead = $("dead");
+  // Кнопка силы (сыворотка); на ПК — Q или правая кнопка мыши.
+  $("cast").addEventListener("touchstart", (e) => { e.preventDefault(); S.cast = 1; }, { passive: false });
+  $("cast").addEventListener("mousedown", () => (S.cast = 1));
+  canvas.addEventListener("contextmenu", (e) => e.preventDefault());
   let hp = 100, kills = 0, hitT = 0, hurt = 0;
   const stats = () => ($("stats").textContent = `❤ ${Math.ceil(hp)}   ☠ ${kills}`);
   const vibrate = (ms) => navigator.vibrate?.(ms);
@@ -92,6 +98,7 @@ function setup() {
     if (dead.style.display === "flex") { S.restart = 1; return; }
     if (document.pointerLockElement !== canvas) canvas.requestPointerLock?.();
     else if (e.button === 0) S.fire = 1;
+    else if (e.button === 2) S.cast = 1;
   });
   dead.addEventListener("click", () => (S.restart = 1));
   addEventListener("mouseup", (e) => { if (e.button === 0) S.fire = 0; });
@@ -104,12 +111,12 @@ function setup() {
     S.right = (k("KeyD", "ArrowRight") ? 1 : 0) - (k("KeyA", "ArrowLeft") ? 1 : 0);
     S.forward = (k("KeyW", "ArrowUp") ? 1 : 0) - (k("KeyS", "ArrowDown") ? 1 : 0);
   };
-  addEventListener("keydown", (e) => { keys.add(e.code); keyAxis(); if (e.code === "Space" && dead.style.display === "flex") S.restart = 1; });
+  addEventListener("keydown", (e) => { keys.add(e.code); keyAxis(); if (e.code === "KeyQ") S.cast = 1; if (e.code === "Space" && dead.style.display === "flex") S.restart = 1; });
   addEventListener("keyup", (e) => { keys.delete(e.code); keyAxis(); });
 
   window.gengineInput = () => {
-    const out = new Float32Array([S.right, S.forward, S.dx, S.dy, S.fire, S.restart]);
-    S.dx = S.dy = 0; S.restart = 0;
+    const out = new Float32Array([S.right, S.forward, S.dx, S.dy, S.fire, S.restart, S.cast]);
+    S.dx = S.dy = 0; S.restart = 0; S.cast = 0;
     return out;
   };
 
