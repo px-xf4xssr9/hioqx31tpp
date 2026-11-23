@@ -42,6 +42,9 @@ function __wbg_get_imports() {
         __wbg_bindVertexArray_cc64c48bf67ab8d4: function(arg0, arg1) {
             arg0.bindVertexArray(arg1);
         },
+        __wbg_blendFunc_378a3be8ab6cb7d0: function(arg0, arg1, arg2) {
+            arg0.blendFunc(arg1 >>> 0, arg2 >>> 0);
+        },
         __wbg_bufferData_41b591a9f2d502ad: function(arg0, arg1, arg2, arg3) {
             arg0.bufferData(arg1 >>> 0, arg2, arg3 >>> 0);
         },
@@ -92,9 +95,15 @@ function __wbg_get_imports() {
             const ret = Reflect.deleteProperty(arg0, arg1);
             return ret;
         }, arguments); },
+        __wbg_depthMask_2ba7e83178c3cec3: function(arg0, arg1) {
+            arg0.depthMask(arg1 !== 0);
+        },
         __wbg_devicePixelRatio_90ee4024cee5d5f4: function(arg0) {
             const ret = arg0.devicePixelRatio;
             return ret;
+        },
+        __wbg_disable_8a9e81e6d64d046b: function(arg0, arg1) {
+            arg0.disable(arg1 >>> 0);
         },
         __wbg_document_3b5c3071b43e97ee: function(arg0) {
             const ret = arg0.document;
@@ -227,6 +236,10 @@ function __wbg_get_imports() {
             const ret = result;
             return ret;
         },
+        __wbg_isEnabled_7f602de983956b41: function(arg0, arg1) {
+            const ret = arg0.isEnabled(arg1 >>> 0);
+            return ret;
+        },
         __wbg_length_186163212ffe79c3: function(arg0) {
             const ret = arg0.length;
             return ret;
@@ -282,6 +295,9 @@ function __wbg_get_imports() {
         },
         __wbg_uniform1f_fe417acc7c7a1dc5: function(arg0, arg1, arg2) {
             arg0.uniform1f(arg1, arg2);
+        },
+        __wbg_uniform1fv_a71814c5c9b8550c: function(arg0, arg1, arg2, arg3) {
+            arg0.uniform1fv(arg1, getArrayF32FromWasm0(arg2, arg3));
         },
         __wbg_uniform1i_778a02a48ecdceed: function(arg0, arg1, arg2) {
             arg0.uniform1i(arg1, arg2);
