@@ -16,7 +16,7 @@
 </head>
 <body>
 <h1>Замер этапа 0</h1>
-<p>Сборка 11240014</p>
+<p>Сборка 11240313</p>
 <p>Открой каждую сборку на телефоне, подожди 12 секунд, пока рамка панели справа внизу не станет зелёной, и нажми «Скопировать результат». Пришли мне результаты.</p>
 <table id="t">
   <tr><th>Сборка</th><th>Что это</th><th>Вес старта (brotli)</th><th>Открыть</th></tr>
@@ -44,12 +44,12 @@
     ["bench3d", "Rust + рендер Bevy (для сравнения)", "", [1000, 10000]],
     ["min2d", "Rust + Bevy: ядро + 2D + интерфейс", "", [1000, 10000]],
   ];
-  fetch("sizes.json?b=11240014").then((r) => r.json()).catch(() => ({})).then((sizes) => {
+  fetch("sizes.json?b=11240313").then((r) => r.json()).catch(() => ({})).then((sizes) => {
     const t = document.getElementById("t");
     for (const [id, what, extra, counts] of rows) {
       const s = sizes[id] ? `${(sizes[id].total_br / 1048576).toFixed(2)} МБ` : "—";
       const q = extra ? `${extra}&` : "";
-      const links = counts.map((n) => `<a href="${id}/?${q}units=${n}&b=11240014">${n}</a>`).join(" · ");
+      const links = counts.map((n) => `<a href="${id}/?${q}units=${n}&b=11240313">${n}</a>`).join(" · ");
       t.insertAdjacentHTML("beforeend", `<tr><td>${id}</td><td>${what}</td><td>${s}</td><td>${links}</td></tr>`);
     }
   });
