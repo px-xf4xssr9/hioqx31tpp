@@ -87,6 +87,7 @@ function setup() {
   let stickId = null, lookId = null, ox = 0, oy = 0, lx = 0, ly = 0;
   canvas.addEventListener("touchstart", (e) => {
     e.preventDefault();
+    if (window.gengineJournalIsOpen?.()) return; // дневник открыт: пальцем рисуют (web/journal.js)
     for (const t of e.changedTouches) {
       if (dead.style.display === "flex") { S.restart = 1; continue; }
       if (t.clientX < innerWidth / 2 && stickId === null) {
@@ -124,6 +125,7 @@ function setup() {
 
   // Мышь и клавиатура.
   canvas.addEventListener("mousedown", (e) => {
+    if (window.gengineJournalIsOpen?.()) return; // дневник открыт: мышью рисуют
     if (dead.style.display === "flex") { S.restart = 1; return; }
     if (document.pointerLockElement !== canvas) canvas.requestPointerLock?.();
     else if (e.button === 0) S.fire = 1;
@@ -140,7 +142,7 @@ function setup() {
     S.right = (k("KeyD", "ArrowRight") ? 1 : 0) - (k("KeyA", "ArrowLeft") ? 1 : 0);
     S.forward = (k("KeyW", "ArrowUp") ? 1 : 0) - (k("KeyS", "ArrowDown") ? 1 : 0);
   };
-  addEventListener("keydown", (e) => { keys.add(e.code); keyAxis(); if (e.code === "KeyQ" && !e.repeat) { S.cast = 1; S.castHeld = 1; } if (e.code === "Space" && dead.style.display === "flex") S.restart = 1; });
+  addEventListener("keydown", (e) => { if (document.activeElement?.id === "jin") return; keys.add(e.code); keyAxis(); if (e.code === "KeyQ" && !e.repeat) { S.cast = 1; S.castHeld = 1; } if (e.code === "Space" && dead.style.display === "flex") S.restart = 1; });
   addEventListener("keyup", (e) => { keys.delete(e.code); keyAxis(); if (e.code === "KeyQ") S.castHeld = 0; });
 
   window.gengineInput = () => {
