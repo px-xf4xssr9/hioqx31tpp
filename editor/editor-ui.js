@@ -115,9 +115,31 @@ function changed(label) { ED.full = []; recompute(); autosave(); if (label) say(
 function restore(text) { ED.clip = C.parseClip(text); if (ED.sel != null && ED.sel >= ED.clip.keys.length) ED.sel = null; recompute(); autosave(); }
 function undo() { if (!ED.undo.length) return; ED.redo.push(snapshot()); restore(ED.undo.pop()); say("отменено"); }
 function redo() { if (!ED.redo.length) return; ED.undo.push(snapshot()); restore(ED.redo.pop()); say("возвращено"); }
+// Проверки движка по всему клипу (поза модели с хватом): запястье в пределах, рука дотягивается до ручки,
+// кисть не срывается с неё, кожа не уходит в ручку, подушечки касаются (пороги GRAB — crates/lite/src/editor/grip.rs).
+function engineCheck() {
+  ED.engineDone = false;
+  if (!window.gengineEditorEval || !window.gengineEditorOut) return;
+  const fr = ED.traj.frames, d = [ED.clip.side === "r" ? 1 : 0, ...C.leverNums(ED.clip), fr.length];
+  for (const f of fr) { const g = C.gripAt(ED.clip, f.t); d.push(...f.q, g.w, g.phi); }
+  const r = window.gengineEditorEval(new Float32Array(d));
+  if (!r || !r.length) return;
+  ED.engineDone = true;
+  const deg = (v) => `${Math.round(v)}°`;
+  fr.forEach((f, i) => {
+    const [flex, dev, tw, out, reach, miss, pen, gap] = r.slice(i * 8, i * 8 + 8), w = C.gripAt(ED.clip, f.t).w, is = ED.issues[i];
+    if (out > 0.5) is.push({ sev: "red", msg: `запястье вывернуто: сгиб ${deg(flex)} (±80°), отклонение ${deg(dev)} (−30…20°), скрутка ${deg(tw)} (−80…85°)` });
+    if (w < 0.99) return;
+    if (reach > 1.0) is.push({ sev: "red", msg: `рука не дотягивается до ручки: не хватает ${Math.round((reach - 1) * 100)}% длины руки — рычаг ближе`, fix: { op: "leverCloser", k: reach } });
+    else if (miss > 5) is.push({ sev: "red", msg: `кисть сорвалась с ручки на ${miss.toFixed(0)} мм` });
+    if (pen > 1.9) is.push({ sev: "red", msg: `кожа уходит в ручку на ${pen.toFixed(1)} мм (живые ≤ 1.9 мм, GRAB)` });
+    if (gap > 4.6) is.push({ sev: "red", msg: `пальцы не касаются ручки: зазор ${gap.toFixed(1)} мм (живые ≤ 4.6 мм, GRAB)` });
+  });
+}
 function recompute() {
   ED.traj = C.trajectory(ED.clip, ED.cache);
   ED.issues = C.quickCheck(ED.clip, ED.traj);
+  engineCheck();
   ED.time = Math.min(ED.time, ED.clip.T);
   if (ED.cache.size > 4000) ED.cache.clear();
   panel(); draw();
@@ -185,9 +207,8 @@ function draw() {
   const disp = (b) => [sideX(b[0]), b[1]]; // кисть модели (левая) → экран клипа
   tr.frames.forEach((fr, i) => { if (i % 2 === 0) put(disp(fr.ball), fr.ball[2], 4, 0); });
   if (ED.onion) for (const d of [-6, -3, 3, 6]) { const f = fi + d; if (f >= 0 && f < tr.n) put(disp(tr.frames[f].ball), tr.frames[f].ball[2], 7, 2); }
-  for (const t of ED.clip.targets || []) {
-    put(t.ndc, t.depth ?? 0.4, 5, 3);
-    if (t.throw) put([t.ndc[0] + t.throw[0], t.ndc[1] + t.throw[1]], t.depth ?? 0.4, 5, 3);
+  for (const t of ED.clip.targets || []) { // рычаг рисует движок моделью; остальные предметы пока — точки
+    if (t.kind !== "lever") put(t.ndc, t.depth ?? 0.4, 5, 2);
   }
   ED.clip.keys.forEach((k, i) => {
     const e = C.effKey(ED.clip, k), ball = C.toScreen(C.fk(tr.keyQ[i]).ball), col = keyRed(i) ? 2 : i === ED.sel ? 1 : 0;
@@ -196,7 +217,8 @@ function draw() {
   });
   const out = window.gengineEditorOut;
   if (ED.sel != null && out) put([out[0], out[1]], out[2], 6, 1); // локоть модели: тянуть — направление предплечья
-  ED.frameData = new Float32Array([ED.clip.side === "r" ? 1 : 0, ...cur.q, ED.quality, gz.length / 6, ...gz]);
+  const gp = C.gripAt(ED.clip, ED.time);
+  ED.frameData = new Float32Array([ED.clip.side === "r" ? 1 : 0, ...cur.q, ED.quality, gp.w, gp.phi, ...C.leverNums(ED.clip), gz.length / 6, ...gz]);
   // подписи поверх: номера ключей и кольцо выбранного/красного
   g.font = "600 12px system-ui"; g.lineWidth = 2;
   ED.clip.keys.forEach((k, i) => {
@@ -451,6 +473,7 @@ function tick(ts) {
     const dt = last ? (ts - last) / 1000 : 0; ED.time += dt * Number($("speed").value);
     if (ED.time > ED.clip.T) ED.time = 0;
   }
+  if (!ED.engineDone && window.gengineEditorOut && ED.traj) { engineCheck(); if (ED.engineDone) panel(); }
   draw(); // каждый кадр: движок берёт позу и гизмо (gengineEditor), локоть модели — из gengineEditorOut
   last = ts; requestAnimationFrame(tick);
 }
@@ -482,7 +505,7 @@ $("addtg").onchange = () => {
   edit(() => {
     ED.clip.targets = ED.clip.targets || [];
     const n = ED.clip.targets.filter((t) => t.kind === kind).length + 1, ru = { lever: "рычаг", door: "ручка двери", item: "предмет" }[kind];
-    const t = { id: kind + n, kind, label: ru + (n > 1 ? " " + n : ""), ndc: [0.25, kind === "item" ? -0.35 : 0.1], depth: 0.4 };
+    const t = { id: kind + n, kind, label: ru + (n > 1 ? " " + n : ""), ndc: [kind === "lever" ? 0.1 : 0.25, kind === "item" ? -0.35 : 0.1], depth: kind === "lever" ? 0.34 : 0.4 };
     if (kind === "lever") t.throw = [0, -0.35];
     ED.clip.targets.push(t);
   }, "предмет поставлен: тяните его; ключ рядом с ним прилипнет");
@@ -491,9 +514,9 @@ function fixAll() {
   let n = 0;
   edit(() => {
     for (let pass = 0; pass < 6; pass++) {
-      const tr = C.trajectory(ED.clip, ED.cache), is = C.quickCheck(ED.clip, tr);
-      const x = is.flat().find((v) => v.sev === "red" && v.fix);
-      if (!x || !C.applyFix(ED.clip, tr, x.fix)) break; n++;
+      recompute(); // быстрые проверки и проверки движка
+      const x = ED.issues.flat().find((v) => v.sev === "red" && v.fix);
+      if (!x || !C.applyFix(ED.clip, ED.traj, x.fix)) break; n++;
     }
   });
   say(n ? `поправлено: ${n}` : "нечего поправлять автоматически");

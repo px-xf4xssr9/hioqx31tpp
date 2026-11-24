@@ -227,6 +227,7 @@ export function quickCheck(clip, traj) {
     const { terms, screen } = keyTerms(q, k);
     const elbowBad = k.elbow != null && (k.elbow > lim("flex")[1] || k.elbow < lim("flex")[0]);
     if (elbowBad) return; // промах кисти и глубины тут — следствие сгиба за пределом: показываем одну причину
+    if (k0.attach) return; // кисть на предмете ставит движок (хват, досягаемость) — его проверки, см. gripAt
     if (terms.ndc > 0.06) issues[f].push({ sev: "red", key: i, msg: `кисть не достаёт до ключа: промах ${terms.ndc.toFixed(2)} экрана (суставы в пределе)`, fix: { op: "ndc", key: i, v: [r3(clip.side === "r" ? -screen[0] : screen[0]), r3(screen[1])] } });
     if (terms.depth > 0.03) issues[f].push({ sev: "red", key: i, msg: `глубина кисти ${screen[2].toFixed(2)} м вне [${k.depth.map((v) => Number(v).toFixed(2)).join("; ")}]`, fix: { op: "depth", key: i, v: [r3(Math.max(NEAR + 0.03, screen[2] - 0.05)), r3(screen[2] + 0.05)] } });
     if (terms.forearm > 25) issues[f].push({ sev: "warn", key: i, msg: `направление предплечья мимо на ${deg(terms.forearm)}` });
@@ -257,6 +258,11 @@ export function applyFix(clip, traj, fix) {
     const t = traj.frames[fix.f].t; let bi = 0;
     K.forEach((k, i) => { if (Math.abs(k.t - t) < Math.abs(K[bi].t - t)) bi = i; });
     const d = K[bi].depth || [0.2, 0.3]; K[bi].depth = [Math.max(d[0], NEAR + 0.04), Math.max(d[1], NEAR + 0.1)];
+    return true;
+  }
+  if (fix.op === "leverCloser") { // рычаг ближе к плечу: та же точка на экране, меньше глубина
+    const L = lever(clip); if (!L) return false;
+    L.depth = r3(Math.max(NEAR + 0.08, Number(L.depth ?? 0.4) / (fix.k * 1.04)));
     return true;
   }
   if (fix.op === "slow") { // растянуть промежуток между ключами вокруг кадра — скорость падает пропорционально
@@ -337,6 +343,29 @@ export function parseClip(text) {
     if (Number.isInteger(v) && /[.eE]/.test(src)) { const b = new Number(v); b.f = true; return b; }
     return v;
   });
+}
+
+/** Хват предмета-рычага во времени: доля хвата w (0 — рука своя, 1 — кисть на ручке) и доля хода phi.
+ *  Берётся с ключа, прилепленного к ручке (attach = id), тянет до ключа на конце хода (id@end); после
+ *  него, если дальше есть свои ключи, кисть отпускает ручку. Рычаг после хода остаётся внизу. */
+export function lever(clip) { return (clip.targets || []).find((t) => t.kind === "lever" && t.throw) || null; }
+export function gripAt(clip, t) {
+  const L = lever(clip); if (!L) return { w: 0, phi: 0 };
+  const ks = clip.keys.map((k) => ({ t: Number(k.t), a: k.attach })).sort((a, b) => a.t - b.t);
+  const g = ks.find((k) => k.a === L.id), e = [...ks].reverse().find((k) => k.a === L.id + "@end");
+  if (!g) return { w: 0, phi: 0 };
+  const sm = (x) => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };
+  const te = e && e.t > g.t ? e.t : null;
+  const after = te != null && ks.some((k) => k.t > te + 1e-6 && !k.a);
+  let w = sm((t - (g.t - 0.12)) / 0.12);
+  if (after) w *= 1 - sm((t - (te + 0.05)) / 0.15);
+  const phi = te == null ? 0 : sm((t - g.t) / (te - g.t));
+  return { w, phi };
+}
+/** Числа рычага для движка: [есть, ручка в начале x, y, глубина, в конце x, y]. */
+export function leverNums(clip) {
+  const L = lever(clip); if (!L) return [0, 0, 0, 0, 0, 0];
+  return [1, Number(L.ndc[0]), Number(L.ndc[1]), Number(L.depth ?? 0.4), Number(L.ndc[0]) + Number(L.throw[0]), Number(L.ndc[1]) + Number(L.throw[1])];
 }
 
 export const emptyClip = () => ({ _doc: "Новый клип (редактор анимаций). Двойной щелчок по кадру — ключ.", T: 1.0, release_t: 0.5, side: "l", keys: [] });

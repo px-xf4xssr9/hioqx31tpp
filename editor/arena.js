@@ -385,16 +385,21 @@ function __wbg_get_imports() {
             return ret;
         },
         __wbindgen_generic_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [F64], shim_idx: 11, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [F64], shim_idx: 13, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen_dae934d5fb164489___convert__closures_____invoke___f64______true_);
             return ret;
         },
-        __wbindgen_generic_0000000000000002: function(arg0) {
+        __wbindgen_generic_0000000000000002: function(arg0, arg1) {
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Vector(F32)], shim_idx: 11, ret: Vector(F32), inner_ret: Some(Vector(F32)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, wasm_bindgen_dae934d5fb164489___convert__closures_____invoke___alloc_46d95d5090e9754d___vec__Vec_f32___alloc_46d95d5090e9754d___vec__Vec_f32___true_);
+            return ret;
+        },
+        __wbindgen_generic_0000000000000003: function(arg0) {
             // Cast intrinsic for `F64 -> Externref`.
             const ret = arg0;
             return ret;
         },
-        __wbindgen_generic_0000000000000003: function(arg0, arg1) {
+        __wbindgen_generic_0000000000000004: function(arg0, arg1) {
             // Cast intrinsic for `Ref(String) -> Externref`.
             const ret = getStringFromWasm0(arg0, arg1);
             return ret;
@@ -412,6 +417,15 @@ function __wbg_get_imports() {
         __proto__: null,
         "./arena_bg.js": import0,
     };
+}
+
+function wasm_bindgen_dae934d5fb164489___convert__closures_____invoke___alloc_46d95d5090e9754d___vec__Vec_f32___alloc_46d95d5090e9754d___vec__Vec_f32___true_(arg0, arg1, arg2) {
+    const ptr0 = passArrayF32ToWasm0(arg2, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.wasm_bindgen_dae934d5fb164489___convert__closures_____invoke___alloc_46d95d5090e9754d___vec__Vec_f32___alloc_46d95d5090e9754d___vec__Vec_f32___true_(arg0, arg1, ptr0, len0);
+    var v2 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+    return v2;
 }
 
 function wasm_bindgen_dae934d5fb164489___convert__closures_____invoke___f64______true_(arg0, arg1, arg2) {
