@@ -1,279 +1,429 @@
-// Редактор анимаций рук: таймлайн, ключи, отмена, автосохранение, проверки, команды. Формат клипа —
-// как tools/anim/motion/*.json (keyed.py); новые поля описаны в tools/anim/README.md («Редактор»).
-import { solveClip, checkFrames, FPS } from "./editor-arm.js";
-import { TEMPLATES, resolveAttach, mirror, autofix, command } from "./editor-ai.js";
-import { View, PROP_NAMES } from "./editor-view.js";
+// Редактор анимаций рук (этап 1): интерфейс поверх web/editor-core.js.
+// Запуск локально (сохранение в tools/anim/motion, полная проверка, команды ИИ): python3 tools/anim/editor_server.py
+// В опубликованной сборке — те же клипы только для просмотра/правки, сохранение — скачать файл и автосохранение в браузере.
+import * as C from "./editor-core.js";
 
 const $ = (id) => document.getElementById(id);
-const r3 = (v) => Math.round(v * 1000) / 1000;
-const S = { name: "", clip: { T: 1, keys: [] }, frames: [], checks: [], cur: 0, sel: null, selProp: null,
-  undo: [], redo: [], playing: false, server: false, full: null, diskText: "" };
-const view = new View($("view"));
-const LS = (n) => `gengine-editor:${n}`;
-const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } },
-  set(k, v) { try { localStorage.setItem(k, v); } catch { /* приватный режим */ } } };
+const cv = $("cv"), g = cv.getContext("2d"), tl = $("tlc"), tg = tl.getContext("2d");
+const ED = (window.ED = {
+  clip: C.emptyClip(), name: "", server: false, sel: null, time: 0, playing: false, onion: true,
+  undo: [], redo: [], cache: new Map(), traj: null, issues: [], full: [], mtime: 0, dirty: false,
+});
 
-export const text = () => JSON.stringify(S.clip, null, 1) + "\n";
-function status(s, cls) { $("status").textContent = s; $("status").className = cls || ""; }
-
-function solve() {
-  resolveAttach(S.clip);
-  S.frames = solveClip(S.clip); S.checks = checkFrames(S.clip, S.frames);
-  S.cur = Math.min(S.cur, S.frames.length - 1);
-  if (S.full) S.full = null; // результат полной проверки относится к старой версии
-  const red = S.checks.filter((c) => c.length).length;
-  status(red ? `красных кадров: ${red} из ${S.frames.length}` : `все быстрые проверки зелёные (${S.frames.length} кадров)`, red ? "red" : "green");
-  $("hint").style.display = S.clip.keys.length ? "none" : "block";
-  draw(); inspector();
+// ---------- состояние и правки ----------
+function snapshot() { return C.dumpClip(ED.clip); }
+function edit(fn, label) {
+  const before = snapshot();
+  fn();
+  if (snapshot() === before) return;
+  ED.undo.push(before); ED.redo = []; if (ED.undo.length > 300) ED.undo.shift();
+  changed(label);
 }
-function draw() { view.layout(); view.draw({ ...S }); timeline(); }
-
-// ---- правки: снимок до, отмена/возврат, автосохранение ----
-function begin() { S.undo.push(text()); if (S.undo.length > 200) S.undo.shift(); S.redo = []; }
-function commit() { store.set(LS(S.name), text()); solve(); }
-function edit(fn) { begin(); fn(); commit(); }
-function restore(t) { const i = S.sel ? S.clip.keys.indexOf(S.sel) : -1; S.clip = JSON.parse(t); S.sel = S.clip.keys[i] || null; commit(); }
-function undo() { if (!S.undo.length) return; S.redo.push(text()); restore(S.undo.pop()); }
-function redo() { if (!S.redo.length) return; S.undo.push(text()); restore(S.redo.pop()); }
-
-function load(name, t, fromDisk) {
-  S.name = name; S.clip = JSON.parse(t); S.clip.keys = S.clip.keys || [];
-  S.sel = null; S.undo = []; S.redo = []; S.cur = 0;
-  if (fromDisk) S.diskText = t;
-  solve();
+function changed(label) { ED.full = []; recompute(); autosave(); if (label) say(label); }
+function restore(text) { ED.clip = C.parseClip(text); if (ED.sel != null && ED.sel >= ED.clip.keys.length) ED.sel = null; recompute(); autosave(); }
+function undo() { if (!ED.undo.length) return; ED.redo.push(snapshot()); restore(ED.undo.pop()); say("отменено"); }
+function redo() { if (!ED.redo.length) return; ED.undo.push(snapshot()); restore(ED.redo.pop()); say("возвращено"); }
+function recompute() {
+  ED.traj = C.trajectory(ED.clip, ED.cache);
+  ED.issues = C.quickCheck(ED.clip, ED.traj);
+  ED.time = Math.min(ED.time, ED.clip.T);
+  if (ED.cache.size > 4000) ED.cache.clear();
+  panel(); draw();
 }
-async function openClip(name) {
-  const saved = store.get(LS(name));
-  let disk = null;
-  try { const r = await fetch(`clips/${name}.json`, { cache: "no-store" }); if (r.ok) disk = await r.text(); } catch { /* нет файла */ }
-  S.diskText = disk || "";
-  load(name, saved || disk || JSON.stringify(TEMPLATES.empty.clip()), false);
-  if (saved && disk && saved !== disk) status("открыта автосохранённая версия (Сохранить — записать в файл; Ctrl+Z работает)", "");
-  history.replaceState(null, "", `?clip=${encodeURIComponent(name)}`);
+const say = (s) => { $("msg").textContent = s; };
+
+let saveTimer = null;
+function autosave() {
+  ED.dirty = true;
+  try { localStorage.setItem("gengine-editor:" + (ED.name || "новый"), snapshot()); } catch (e) { /* приватное окно */ }
+  if (!ED.server || !ED.name) return;
+  clearTimeout(saveTimer); saveTimer = setTimeout(() => saveServer(), 700);
+}
+async function saveServer() {
+  const c = C.parseClip(snapshot()); C.bakeAttach(c);
+  const r = await fetch("api/clip?name=" + encodeURIComponent(ED.name), { method: "PUT", body: C.dumpClip(c) });
+  if (r.ok) { ED.mtime = (await r.json()).mtime; ED.dirty = false; $("status").dataset.saved = "сохранено " + ED.name; }
+  else say("не сохранилось: " + (await r.text()));
 }
 async function save() {
-  const t = text();
-  store.set(LS(S.name), t);
-  if (S.server) {
-    const r = await fetch(`clips/${S.name}.json`, { method: "PUT", body: t });
-    if (r.ok) { S.diskText = t; status(`сохранено: tools/anim/motion/${S.name}.json`, "green"); return; }
-  }
+  if (ED.server && ED.name) { clearTimeout(saveTimer); await saveServer(); say("сохранено: tools/anim/motion/" + ED.name); return; }
+  const c = C.parseClip(snapshot()); C.bakeAttach(c);
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([t], { type: "application/json" })); a.download = `${S.name}.json`; a.click();
-  status(`скачано ${S.name}.json (положить в tools/anim/motion/)`, "green");
+  a.href = URL.createObjectURL(new Blob([C.dumpClip(c)], { type: "application/json" }));
+  a.download = ED.name || "clip.json"; a.click(); say("скачан файл " + a.download);
 }
 
-// ---- таймлайн ----
-const tl = $("tl"), tg = tl.getContext("2d");
-const tx = (t) => 30 + (t / S.clip.T) * (tl.width - 60);
-const tt = (x) => Math.max(0, Math.min(S.clip.T, ((x - 30) / (tl.width - 60)) * S.clip.T));
-function timeline() {
-  const dpr = window.devicePixelRatio || 1, r = tl.getBoundingClientRect();
-  tl.width = Math.round(r.width * dpr); tl.height = Math.round(r.height * dpr);
-  tg.setTransform(1, 0, 0, 1, 0, 0); tg.fillStyle = "#11151a"; tg.fillRect(0, 0, tl.width, tl.height);
-  const n = S.frames.length, h = tl.height, fw = (tl.width - 60) / Math.max(1, n - 1);
-  for (let i = 0; i < n; i++) { // кадры: красные — с нарушениями
-    const x = tx(S.frames[i].t);
-    tg.fillStyle = S.checks[i]?.length ? "#e74c3c" : S.full?.frames?.[i]?.length ? "#e67e22" : "#24303a";
-    tg.fillRect(x - fw / 2 + 1, h * 0.55, Math.max(1, fw - 2), h * 0.25);
-    if (i % 5 === 0) { tg.fillStyle = "#8b97a3"; tg.font = `${10 * dpr}px system-ui`; tg.fillText(String(i), x - 3, h * 0.95); }
+async function load(name) {
+  let text = null;
+  if (ED.server) { const r = await fetch("api/clip?name=" + encodeURIComponent(name)); if (r.ok) { text = await r.text(); ED.mtime = Number(r.headers.get("X-Mtime") || 0); } }
+  else {
+    try { text = localStorage.getItem("gengine-editor:" + name); } catch (e) { text = null; }
+    if (!text) { const r = await fetch("clips/" + name); if (r.ok) text = await r.text(); }
   }
-  if (S.clip.release_t !== undefined) { tg.fillStyle = "#9b59b6"; tg.fillRect(tx(S.clip.release_t) - 1, 0, 2, h * 0.8); }
-  for (const k of S.clip.keys) {
-    const x = tx(k.t), y = h * 0.3, s = 7 * dpr;
-    tg.fillStyle = k === S.sel ? "#f1c40f" : "#ecf0f1";
-    tg.beginPath(); tg.moveTo(x, y - s); tg.lineTo(x + s, y); tg.lineTo(x, y + s); tg.lineTo(x - s, y); tg.fill();
-  }
-  const x = tx(S.frames[S.cur]?.t || 0);
-  tg.fillStyle = "#3498db"; tg.fillRect(x - 1, 0, 2, h);
+  if (text == null) { say("нет клипа " + name); return; }
+  ED.name = name; ED.sel = null; ED.undo = []; ED.redo = []; ED.time = 0; ED.cache.clear();
+  ED.clip = C.parseClip(text); recompute(); ED.dirty = false; say("открыт " + name);
 }
-let tlDrag = null;
-tl.addEventListener("pointerdown", (e) => {
-  const dpr = window.devicePixelRatio || 1, x = e.offsetX * dpr, y = e.offsetY * dpr;
-  const k = S.clip.keys.find((k) => Math.abs(tx(k.t) - x) < 9 * dpr && y < tl.height * 0.55);
-  tl.setPointerCapture(e.pointerId);
-  if (k) { S.sel = k; begin(); tlDrag = { key: k }; inspector(); draw(); return; }
-  tlDrag = { scrub: true }; seek(tt(x));
-});
-tl.addEventListener("pointermove", (e) => {
-  const dpr = window.devicePixelRatio || 1, x = e.offsetX * dpr, y = e.offsetY * dpr;
-  if (tlDrag?.key) { tlDrag.key.t = r3(Math.round(tt(x) * FPS) / FPS); tlDrag.moved = true; solve(); }
-  else if (tlDrag?.scrub) seek(tt(x));
-  const i = Math.round((tt(x) / S.clip.T) * (S.frames.length - 1)), bad = [...(S.checks[i] || []), ...(S.full?.frames?.[i] || []).map((t) => ({ text: "полная: " + t }))];
-  const tip = $("tip");
-  if (bad.length && y > tl.height * 0.5) {
-    tip.innerHTML = `<b>кадр ${i}</b><br>` + bad.map((b) => "• " + b.text).join("<br>") + "<br><i>«Поправить» — ближайшая допустимая поза</i>";
-    tip.style.display = "block"; tip.style.left = e.clientX + 12 + "px"; tip.style.top = e.clientY - 20 - tip.offsetHeight + "px";
-  } else tip.style.display = "none";
-});
-tl.addEventListener("pointerup", () => { if (tlDrag?.key) { if (!tlDrag.moved) S.undo.pop(); else commit(); } tlDrag = null; });
-tl.addEventListener("pointerleave", () => ($("tip").style.display = "none"));
-tl.addEventListener("dblclick", (e) => addKey(tt(e.offsetX * (window.devicePixelRatio || 1))));
-function seek(t) { S.cur = Math.round((t / S.clip.T) * (S.frames.length - 1)); draw(); inspector(); }
 
-function addKey(t) {
-  t = r3(Math.round(t * FPS) / FPS);
-  const fr = S.frames[Math.round((t / S.clip.T) * (S.frames.length - 1))];
-  const k = { t, ndc: [r3(fr.p.B[0]), r3(fr.p.B[1])], depth: [r3(fr.p.B[2] - 0.04), r3(fr.p.B[2] + 0.04)] };
-  edit(() => { S.clip.keys.push(k); S.clip.keys.sort((a, b) => a.t - b.t); S.sel = k; });
+// ---------- окно кадра ----------
+let view = { x: 0, y: 0, w: 1, h: 1 };
+function layout() {
+  const r = cv.parentElement.getBoundingClientRect(), dpr = devicePixelRatio || 1;
+  cv.width = r.width * dpr; cv.height = r.height * dpr; g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const pad = 24, W = r.width - pad * 2, H = r.height - pad * 2;
+  const w = Math.min(W, H * C.CAM.asp); const h = w / C.CAM.asp;
+  view = { x: (r.width - w) / 2, y: (r.height - h) / 2, w, h };
+  const t = tl.parentElement.getBoundingClientRect(); tl.width = t.width * dpr; tl.height = t.height * dpr; tg.setTransform(dpr, 0, 0, dpr, 0, 0);
+  draw();
 }
-function delKey() { if (!S.sel) return; edit(() => { S.clip.keys.splice(S.clip.keys.indexOf(S.sel), 1); S.sel = null; }); }
+const sideX = (x) => (ED.clip.side === "r" ? -x : x); // модель — левая рука; правая рисуется зеркально
+const n2p = (n) => [view.x + ((sideX(n[0]) + 1) / 2) * view.w, view.y + ((1 - n[1]) / 2) * view.h];
+const p2n = (x, y) => [sideX(((x - view.x) / view.w) * 2 - 1), 1 - ((y - view.y) / view.h) * 2];
+const p2nRaw = (x, y) => [((x - view.x) / view.w) * 2 - 1, 1 - ((y - view.y) / view.h) * 2]; // в осях клипа (с учётом стороны)
+const keyN2p = (n) => [view.x + ((n[0] + 1) / 2) * view.w, view.y + ((1 - n[1]) / 2) * view.h];
 
-// ---- вид: перетаскивание ключа, предплечья, предмета; колесо — глубина ----
-let vDrag = null;
-const cv = $("view");
-cv.addEventListener("pointerdown", (e) => {
-  const h = view.hit(e.offsetX, e.offsetY);
-  if (!h) { S.sel = null; S.selProp = null; draw(); inspector(); return; }
-  cv.setPointerCapture(e.pointerId); begin(); vDrag = h;
-  if (h.key) { S.sel = h.key; S.selProp = null; seek(h.key.t); } else { S.selProp = h.prop.id; S.sel = null; draw(); inspector(); }
-});
-cv.addEventListener("pointermove", (e) => {
-  if (!vDrag) { const h = view.hit(e.offsetX, e.offsetY); cv.title = h ? { hand: "кисть в ключе: тянуть — где на экране; колесо — глубина", fdir: "предплечье: откуда идёт рука", prop: "предмет: тянуть; прилепленные ключи следуют" }[h.kind] : ""; return; }
-  const n = view.ndc(e.offsetX, e.offsetY).map(r3);
-  if (vDrag.kind === "hand") { const k = vDrag.key; if (k.attach) delete k.attach; k.ndc = n; }
-  if (vDrag.kind === "fdir") { const k = vDrag.key, p = k.ndc || n; const d = [p[0] - n[0], p[1] - n[1]], l = Math.hypot(...d) || 1; k.forearm_dir = [r3(d[0] / l), r3(d[1] / l)]; }
-  if (vDrag.kind === "prop") vDrag.prop.ndc = n;
-  vDrag.moved = true; solve();
-});
-cv.addEventListener("pointerup", () => { if (vDrag) { if (!vDrag.moved) S.undo.pop(); else commit(); } vDrag = null; });
-cv.addEventListener("wheel", (e) => {
-  const k = S.sel; if (!k) return; e.preventDefault();
-  edit(() => { const d = k.depth || [0.3, 0.38], s = e.deltaY > 0 ? 0.01 : -0.01; k.depth = [r3(Math.max(0.12, d[0] + s)), r3(Math.max(0.14, d[1] + s))]; delete k.attach; });
-}, { passive: false });
+function seg(a, b, r, col) { // отрезок руки в 3D: обрезка ближней плоскостью, толщина по глубине
+  let A = C.toCam(a), B = C.toCam(b); const zn = 0.04;
+  if (A[2] < zn && B[2] < zn) return;
+  if (A[2] < zn) A = A.map((v, i) => v + (B[i] - v) * ((zn - A[2]) / (B[2] - A[2])));
+  if (B[2] < zn) B = B.map((v, i) => v + (A[i] - v) * ((zn - B[2]) / (A[2] - B[2])));
+  const pa = n2p(C.camToNdc(A)), pb = n2p(C.camToNdc(B));
+  const px = (z) => Math.min(70, (r / (z * C.TAN_HALF)) * (view.h / 2));
+  g.strokeStyle = col; g.lineCap = "round";
+  g.lineWidth = (px(A[2]) + px(B[2])); g.beginPath(); g.moveTo(...pa); g.lineTo(...pb); g.stroke();
+}
+function drawArm(p, alpha, tint) {
+  g.globalAlpha = alpha;
+  g.globalAlpha = alpha * 0.6; seg(p.S, p.E, 0.045, tint || "#566070"); g.globalAlpha = alpha * 0.9;
+  seg(p.E, p.W, 0.033, tint || "#6b7688");
+  seg(p.W, p.tip, 0.04, tint || "#d9a98c");
+  g.globalAlpha = 1;
+}
+function drawTarget(t) {
+  const [x, y] = keyN2p(t.ndc); g.lineWidth = 3; g.strokeStyle = "#c8b06a"; g.fillStyle = "#c8b06a";
+  if (t.kind === "lever") {
+    const [ex, ey] = keyN2p([t.ndc[0] + t.throw[0], t.ndc[1] + t.throw[1]]);
+    g.fillRect(x - 18, y + 30, 36, 14);
+    g.beginPath(); g.moveTo(x, y + 34); g.lineTo(x, y); g.stroke();
+    g.setLineDash([4, 4]); g.beginPath(); g.moveTo(x, y + 34); g.lineTo(ex, ey); g.stroke(); g.setLineDash([]);
+    g.beginPath(); g.arc(x, y, 7, 0, 7); g.fill(); g.beginPath(); g.arc(ex, ey, 5, 0, 7); g.stroke();
+  } else if (t.kind === "door") { g.fillRect(x - 22, y - 5, 44, 10); g.fillRect(x + 14, y - 5, 8, 24); }
+  else { g.fillRect(x - 70, y + 16, 140, 6); g.beginPath(); g.rect(x - 10, y - 14, 20, 30); g.stroke(); }
+  g.fillStyle = "#c8b06a"; g.font = "12px system-ui"; g.fillText(t.label || t.id, x + 26, y - 10);
+}
 
-// ---- инспектор ключа (русские названия, подсказки) ----
-const FIELDS = [
-  ["t", "время, с", "момент ключа"], ["ndc", "кисть на экране x, y", "−1…1, центр экрана — 0"],
-  ["depth", "глубина от камеры, м (от–до)", "размер кисти в кадре"], ["elbow", "сгиб локтя, °", "0 — прямая рука, предел 150°"],
-  ["forearm_dir", "направление предплечья x, y", "на экране: от локтя к запястью"], ["below", "кисть ниже, ndc y", "уход за нижний край"],
-  ["elbow_off", "локоть за кадром", "рука входит из-за края экрана"], ["w", "вес ключа", "насколько строго держать ключ (1 — обычно)"],
-];
-function inspector() {
-  const el = $("insp"), k = S.sel, fr = S.frames[S.cur];
-  let h = `<b>${S.name || "клип"}</b> · ${S.clip.side === "right" ? "правая" : "левая"} рука<br>
-    <label title="длительность клипа">длительность, с <input type=number step=0.05 data-c=T value=${S.clip.T}></label>
-    <label title="момент отрыва шара/выпуска">выпуск, с <input type=number step=0.01 data-c=release_t value=${S.clip.release_t ?? ""}></label>`;
-  if (k) {
-    h += `<h3>Ключ t=${k.t}</h3>`;
-    for (const [f, name, tip] of FIELDS) {
-      const v = k[f], on = v !== undefined;
-      const inp = f === "elbow_off" ? "" : Array.isArray(v) || f === "ndc" || f === "depth" || f === "forearm_dir"
-        ? [0, 1].map((j) => `<input type=number step=0.01 data-f=${f} data-j=${j} value=${on ? v[j] : ""}>`).join("")
-        : `<input type=number step=${f === "elbow" ? 1 : 0.01} data-f=${f} value=${on ? v : ""}>`;
-      h += `<label title="${tip}"><span><input type=checkbox data-on=${f} ${on ? "checked" : ""}> ${name}</span><span>${inp}</span></label>`;
+function draw() {
+  if (!ED.traj) return;
+  const W = cv.width / (devicePixelRatio || 1), H = cv.height / (devicePixelRatio || 1);
+  g.clearRect(0, 0, W, H);
+  g.fillStyle = "#23262d"; g.fillRect(view.x, view.y, view.w, view.h);
+  g.strokeStyle = "#3a3f49"; g.lineWidth = 1; g.strokeRect(view.x, view.y, view.w, view.h);
+  g.beginPath(); g.moveTo(view.x + view.w / 2 - 8, view.y + view.h / 2); g.lineTo(view.x + view.w / 2 + 8, view.y + view.h / 2);
+  g.moveTo(view.x + view.w / 2, view.y + view.h / 2 - 8); g.lineTo(view.x + view.w / 2, view.y + view.h / 2 + 8); g.stroke();
+  const tr = ED.traj, fi = frameAt(ED.time);
+  if (ED.onion) for (const d of [-6, -3, 3, 6]) { const f = fi + d; if (f >= 0 && f < tr.n) drawArm(tr.frames[f].p, 0.16, d < 0 ? "#7aa7ff" : "#ff9d7a"); }
+  const cur = tr.at(ED.time); const p = C.fk(cur.q);
+  drawArm(p, 1);
+  g.globalAlpha = 0.85; for (const t of ED.clip.targets || []) drawTarget(t); g.globalAlpha = 1; // поверх руки — чтобы было за что тянуть
+  // путь кисти
+  g.strokeStyle = "#5aa9ff55"; g.lineWidth = 1.5; g.beginPath();
+  tr.frames.forEach((fr, i) => { const q = n2p(fr.ball); i ? g.lineTo(...q) : g.moveTo(...q); }); g.stroke();
+  // ключи: цель (кольцо) и достигнутая кисть (точка)
+  ED.clip.keys.forEach((k, i) => {
+    const e = C.effKey(ED.clip, k), q = tr.keyQ[i], ach = n2p(C.toScreen(C.fk(q).ball));
+    const red = keyRed(i);
+    g.fillStyle = red ? "#ff5a5a" : i === ED.sel ? "#5aa9ff" : "#9aa3b2"; g.beginPath(); g.arc(...ach, 4, 0, 7); g.fill();
+    if (e.ndc) {
+      const tp = keyN2p(e.ndc); g.strokeStyle = g.fillStyle; g.lineWidth = i === ED.sel ? 3 : 1.5;
+      g.beginPath(); g.arc(...tp, i === ED.sel ? 11 : 8, 0, 7); g.stroke();
+      g.beginPath(); g.moveTo(...tp); g.lineTo(...ach); g.stroke();
+      g.font = "11px system-ui"; g.fillText(String(i + 1), tp[0] + 12, tp[1] - 8);
     }
-    if (k.elbow !== undefined) h += `<label>локоть <input type=range min=0 max=150 data-f=elbow value=${k.elbow}></label>`;
-    const props = S.clip.props || [];
-    h += `<label title="ключ следует за предметом">прилепить к <select data-attach><option value="">—</option>${props.map((p) => `<option value=${p.id} ${k.attach === p.id ? "selected" : ""}>${PROP_NAMES[p.kind] || p.kind} (${p.id})</option>`).join("")}</select></label>
-      <button data-del>Удалить ключ (Del)</button>`;
-  } else h += `<p style="color:#8b97a3">Двойной щелчок по таймлайну или K — ключ. Щёлкнуть ромб — выбрать.</p>`;
-  if (S.selProp) h += `<h3>Предмет ${S.selProp}</h3><button data-delprop>Убрать предмет</button>`;
-  if (fr) {
-    const bad = S.checks[S.cur];
-    h += `<h3>Кадр ${S.cur}</h3>` + (bad.length ? bad.map((b) => `<div class=red>• ${b.text}</div>`).join("") : `<div class=green>проверки зелёные</div>`);
-    h += `<div style="color:#8b97a3">плечо: подъём ${fr.q[0].toFixed(0)}°, плоскость ${fr.q[1].toFixed(0)}°, ротация ${fr.q[2].toFixed(0)}°<br>локоть ${fr.q[3].toFixed(0)}°</div>`;
-  }
-  h += `<div id=log>${S.log || ""}</div>`;
-  el.innerHTML = h;
-}
-$("insp").addEventListener("change", (e) => {
-  const t = e.target, k = S.sel;
-  if (t.dataset.c) edit(() => { if (t.value === "") delete S.clip[t.dataset.c]; else S.clip[t.dataset.c] = +t.value; });
-  else if (t.dataset.on && k) edit(() => {
-    const f = t.dataset.on, fr = S.frames[S.cur];
-    if (!t.checked) delete k[f];
-    else k[f] = { ndc: [r3(fr.p.B[0]), r3(fr.p.B[1])], depth: [r3(fr.p.B[2] - 0.04), r3(fr.p.B[2] + 0.04)], elbow: Math.round(fr.q[3]),
-      forearm_dir: [r3(fr.p.W[0] - fr.p.E[0]), r3(fr.p.W[1] - fr.p.E[1])], below: -1.1, elbow_off: true, w: 1, t: k.t }[f];
   });
-  else if (t.dataset.f && k) edit(() => { const f = t.dataset.f; if (t.dataset.j !== undefined) { k[f] = k[f] || [0, 0]; k[f][+t.dataset.j] = +t.value; } else k[f] = +t.value; if (f !== "t" && f !== "w" && f !== "elbow") delete k.attach; S.clip.keys.sort((a, b) => a.t - b.t); });
-  else if (t.dataset.attach !== undefined && k) edit(() => { if (t.value) { k.attach = t.value; delete k.attach_off; } else delete k.attach; });
+  if (ED.sel != null) { // манипулятор локтя выбранного ключа: тянуть — направление предплечья
+    const q = tr.keyQ[ED.sel], f = C.fk(q), pe = elbowHandle(f);
+    g.fillStyle = "#f2c14e"; g.beginPath(); g.rect(pe[0] - 6, pe[1] - 6, 12, 12); g.fill();
+  }
+  const fr = tr.frames[fi], bad = ED.issues[fi].filter((x) => x.sev === "red").length + fullAt(fi).length;
+  $("status").textContent = `${ED.time.toFixed(2)} с · кадр ${fi}/${tr.n - 1} · рука в кадре ${Math.round(fr.inFrame * 100)}% · ` +
+    `${C.JOINTS.map((j, i) => `${C.JOINT_RU[j]} ${Math.round(cur.q[i])}°`).join(", ")}${bad ? " · КРАСНЫЙ КАДР" : ""} ${$("status").dataset.saved || ""}`;
+  $("hint").style.display = ED.clip.keys.length ? "none" : "block";
+  $("hint").innerHTML = "<b>С чего начать</b><br>1. Двойной щелчок по кадру — ключ: кисть в этом месте в этот момент.<br>" +
+    "2. Сдвиньте ползунок времени внизу и поставьте ещё 2–4 ключа (взмах: слева → вверху справа → обратно).<br>" +
+    "3. Пробел — проиграть. Колесо над кольцом ключа — ближе/дальше, жёлтый квадрат — локоть.<br>" +
+    "Красное на шкале — нарушение анатомии; «Поправить» — ближайшая допустимая поза.";
+  drawTimeline();
+}
+function elbowHandle(f) { const a = n2p(C.toScreen(f.W)), b = n2p(C.toScreen(f.E)); const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1; return [a[0] + (dx / l) * 60, a[1] + (dy / l) * 60]; }
+const keyRed = (i) => ED.issues.some((fs) => fs.some((x) => x.key === i && x.sev === "red"));
+const frameAt = (t) => Math.max(0, Math.min(ED.traj.n - 1, Math.round((t / ED.clip.T) * (ED.traj.n - 1))));
+const fullAt = (f) => ED.full.filter((r) => r.f === f);
+
+// ---------- шкала времени ----------
+const TLP = 14;
+const t2x = (t) => TLP + (t / ED.clip.T) * (tl.width / (devicePixelRatio || 1) - TLP * 2);
+const x2t = (x) => Math.max(0, Math.min(ED.clip.T, ((x - TLP) / (tl.width / (devicePixelRatio || 1) - TLP * 2)) * ED.clip.T));
+function drawTimeline() {
+  const W = tl.width / (devicePixelRatio || 1), H = tl.height / (devicePixelRatio || 1), tr = ED.traj;
+  tg.clearRect(0, 0, W, H);
+  for (let f = 0; f < tr.n; f++) { // полоса кадров: красные/жёлтые
+    const x0 = t2x(tr.frames[f].t) - 3, sev = ED.issues[f].some((x) => x.sev === "red") || fullAt(f).length ? "#ff5a5a" : ED.issues[f].length ? "#f2c14e" : "#2f6b45";
+    tg.fillStyle = sev; tg.fillRect(x0, 8, 6, 14);
+  }
+  tg.fillStyle = "#8a909c"; tg.font = "11px system-ui";
+  for (let t = 0; t <= ED.clip.T + 1e-6; t += 0.1) { const x = t2x(t); tg.fillRect(x, 26, 1, 6); tg.fillText(t.toFixed(1), x - 8, 44); }
+  if (ED.clip.release_t != null) { const x = t2x(ED.clip.release_t); tg.fillStyle = "#ff9d7a"; tg.fillRect(x - 1, 26, 2, 70); tg.fillText("выпуск", x + 4, 92); }
+  ED.clip.keys.forEach((k, i) => {
+    const x = t2x(k.t); tg.fillStyle = keyRed(i) ? "#ff5a5a" : i === ED.sel ? "#5aa9ff" : "#d0d4dc";
+    tg.beginPath(); tg.moveTo(x, 54); tg.lineTo(x + 8, 64); tg.lineTo(x, 74); tg.lineTo(x - 8, 64); tg.fill();
+  });
+  const x = t2x(ED.time); tg.fillStyle = "#5aa9ff"; tg.fillRect(x - 1, 0, 2, H);
+}
+
+// ---------- панель ----------
+function num(label, val, on, step = 0.01, tip = "") {
+  const r = document.createElement("div"); r.className = "row";
+  r.innerHTML = `<label title="${tip}">${label}</label>`;
+  const i = document.createElement("input"); i.type = "number"; i.step = step; i.value = val ?? ""; i.title = tip;
+  i.onchange = () => on(i.value === "" ? null : Number(i.value)); r.appendChild(i); return r;
+}
+function panel() {
+  const kp = $("keyp"); kp.innerHTML = "";
+  if (ED.sel == null) kp.innerHTML = '<div style="color:var(--dim)">Щелчок по ключу (кольцо или ромб) — выбрать. Двойной щелчок по кадру — новый ключ. K — ключ в текущем моменте, Delete — удалить.</div>';
+  else {
+    const k = ED.clip.keys[ED.sel], set = (f, v, lbl) => edit(() => { if (v == null) delete k[f]; else k[f] = v; }, lbl);
+    kp.appendChild(num("время, с", Number(k.t), (v) => edit(() => { k.t = C.r3(Math.max(0, Math.min(ED.clip.T, v))); }), 0.01));
+    if (k.ndc) { kp.appendChild(num("кисть x (экран)", Number(k.ndc[0]), (v) => set("ndc", [v, k.ndc[1]]), 0.01, "−1 — левый край, +1 — правый")); kp.appendChild(num("кисть y (экран)", Number(k.ndc[1]), (v) => set("ndc", [k.ndc[0], v]), 0.01, "−1 — низ, +1 — верх")); }
+    const d = k.depth || [null, null];
+    kp.appendChild(num("глубина от, м", d[0], (v) => set("depth", v == null ? null : [v, d[1] ?? v + 0.1]), 0.01, "Расстояние кисти от камеры: размер кисти в кадре"));
+    kp.appendChild(num("глубина до, м", d[1], (v) => set("depth", v == null ? null : [d[0] ?? v - 0.1, v]), 0.01));
+    const [lo, hi] = C.lim("flex");
+    kp.appendChild(num("сгиб локтя, °", k.elbow, (v) => set("elbow", v), 1, `0 — прямая рука; допустимо ${lo}…${hi}°`));
+    kp.appendChild(num("ниже края y", k.below, (v) => set("below", v), 0.05, "Кисть не выше этой линии экрана (уход за кадр)"));
+    kp.appendChild(num("вес ключа", k.w, (v) => set("w", v), 0.5, "Насколько строго держать ключ (1 — обычно)"));
+    const r = document.createElement("div"); r.className = "row";
+    r.innerHTML = `<label title="Локоть за кадром, рука входит из-за края экрана">локоть за кадром</label>`;
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!k.elbow_off; cb.onchange = () => set("elbow_off", cb.checked ? true : null); r.appendChild(cb); kp.appendChild(r);
+    if (k.forearm_dir) { const b = document.createElement("button"); b.textContent = "снять направление предплечья"; b.onclick = () => set("forearm_dir", null); kp.appendChild(b); }
+    if (k.attach) { const b = document.createElement("button"); b.textContent = "отлепить от " + k.attach; b.onclick = () => set("attach", null); kp.appendChild(b); }
+  }
+  $("T").value = Number(ED.clip.T); $("rel").value = ED.clip.release_t != null ? Number(ED.clip.release_t) : "";
+  $("side_").textContent = ED.clip.side === "r" ? "правая" : "левая";
+  const all = ED.issues.flatMap((xs, f) => xs.map((x) => ({ ...x, f })));
+  const reds = all.filter((x) => x.sev === "red");
+  $("sum").innerHTML = (reds.length + ED.full.length ? `<span style="color:var(--red)">красных: ${reds.length + ED.full.length}</span>` : '<span style="color:var(--ok)">быстрые проверки зелёные</span>') +
+    ` · суставы, скорости (KIT), кадр${ED.fullInfo ? "<br>" + ED.fullInfo : ""}`;
+  const box = $("issues"); box.innerHTML = "";
+  for (const x of [...all, ...ED.full.map((r) => ({ sev: "red", f: r.f, msg: "полная: " + r.msg }))].slice(0, 60)) {
+    const d = document.createElement("div"); d.className = x.sev; d.textContent = `кадр ${x.f}: ${x.msg}`;
+    d.onclick = () => { ED.time = ED.traj.frames[x.f].t; if (x.key != null) ED.sel = x.key; panel(); draw(); };
+    box.appendChild(d);
+  }
+}
+
+// ---------- мышь: кадр ----------
+let drag = null;
+const mpos = (e, el) => { const r = el.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+function hitKey(x, y) {
+  let best = null;
+  ED.clip.keys.forEach((k, i) => {
+    const e = C.effKey(ED.clip, k); const pts = [n2p(C.toScreen(C.fk(ED.traj.keyQ[i]).ball))]; if (e.ndc) pts.push(keyN2p(e.ndc));
+    for (const p of pts) { const d = Math.hypot(p[0] - x, p[1] - y); if (d < 14 && (!best || d < best.d)) best = { i, d }; }
+  });
+  return best && best.i;
+}
+function hitTarget(x, y) { return (ED.clip.targets || []).find((t) => Math.hypot(keyN2p(t.ndc)[0] - x, keyN2p(t.ndc)[1] - y) < 20); }
+function nearTarget(n) { // прилипание: кисть рядом с предметом (или концом хода рычага)
+  for (const t of ED.clip.targets || []) {
+    if (Math.hypot(t.ndc[0] - n[0], t.ndc[1] - n[1]) < 0.08) return t.id;
+    if (t.throw && Math.hypot(t.ndc[0] + t.throw[0] - n[0], t.ndc[1] + t.throw[1] - n[1]) < 0.08) return t.id + "@end";
+  }
+  return null;
+}
+cv.addEventListener("mousedown", (e) => {
+  const [x, y] = mpos(e, cv);
+  if (ED.sel != null) { const pe = elbowHandle(C.fk(ED.traj.keyQ[ED.sel])); if (Math.hypot(pe[0] - x, pe[1] - y) < 10) { drag = { kind: "elbow", before: snapshot() }; return; } }
+  const i = hitKey(x, y);
+  if (i != null) { ED.sel = i; ED.time = Number(ED.clip.keys[i].t); drag = { kind: "key", before: snapshot() }; panel(); draw(); return; }
+  const t = hitTarget(x, y);
+  if (t) { drag = { kind: "target", t, before: snapshot() }; return; }
+  ED.sel = null; panel(); draw();
 });
-$("insp").addEventListener("click", (e) => {
-  if (e.target.dataset.del !== undefined) delKey();
-  if (e.target.dataset.delprop !== undefined) edit(() => { S.clip.props = S.clip.props.filter((p) => p.id !== S.selProp); for (const k of S.clip.keys) if (k.attach === S.selProp) delete k.attach; S.selProp = null; });
+window.addEventListener("mousemove", (e) => {
+  if (!drag) return tipView(e);
+  const [x, y] = mpos(e, cv), n = p2nRaw(x, y).map(C.r3);
+  if (drag.kind === "key") { const k = ED.clip.keys[ED.sel]; delete k.attach; k.ndc = n; const a = nearTarget(n); if (a) k.attach = a; }
+  else if (drag.kind === "target") drag.t.ndc = n;
+  else if (drag.kind === "elbow") { // направление предплечья (локоть → запястье) на экране, в осях левой руки
+    const f = C.fk(ED.traj.keyQ[ED.sel]), w = n2p(C.toScreen(f.W)); let dx = w[0] - x, dy = -(w[1] - y); const l = Math.hypot(dx, dy) || 1;
+    ED.clip.keys[ED.sel].forearm_dir = [C.r3(dx / l), C.r3(dy / l)];
+  }
+  recompute();
+});
+window.addEventListener("mouseup", () => {
+  if (!drag) return;
+  if (drag.before !== snapshot()) { ED.undo.push(drag.before); ED.redo = []; changed(drag.kind === "target" ? "предмет сдвинут" : "ключ сдвинут"); }
+  drag = null;
+});
+cv.addEventListener("dblclick", (e) => {
+  const [x, y] = mpos(e, cv), n = p2nRaw(x, y).map(C.r3);
+  if (hitKey(x, y) != null) return;
+  addKey(n);
+});
+function addKey(n) {
+  edit(() => {
+    const cur = ED.traj.at(ED.time), z = C.toScreen(C.fk(cur.q).ball)[2];
+    const k = { t: C.r3(ED.time), ndc: n, depth: [C.r3(Math.max(C.NEAR + 0.04, z - 0.05)), C.r3(Math.max(C.NEAR + 0.1, z + 0.05))] };
+    const a = nearTarget(n); if (a) k.attach = a;
+    const same = ED.clip.keys.findIndex((q) => Math.abs(q.t - k.t) < 0.005);
+    if (same >= 0) { ED.clip.keys[same] = { ...ED.clip.keys[same], ...k }; ED.sel = same; }
+    else { ED.clip.keys.push(k); ED.clip.keys.sort((a, b) => a.t - b.t); ED.sel = ED.clip.keys.indexOf(k); }
+  }, "ключ добавлен");
+}
+cv.addEventListener("wheel", (e) => {
+  if (ED.sel == null) return; e.preventDefault();
+  const k = ED.clip.keys[ED.sel], d = k.depth || [0.2, 0.3], s = e.deltaY > 0 ? 0.01 : -0.01;
+  edit(() => { k.depth = [C.r3(Math.max(C.NEAR + 0.02, d[0] + s)), C.r3(Math.max(C.NEAR + 0.05, d[1] + s))]; }, "глубина " + k.depth?.join("–"));
+}, { passive: false });
+function tipView(e) {
+  if (e.target !== cv) return;
+  const [x, y] = mpos(e, cv), i = hitKey(x, y);
+  if (i == null) return hideTip();
+  const k = ED.clip.keys[i], f = frameAt(k.t), xs = ED.issues[f].filter((v) => v.key === i || v.key == null);
+  showTip(e, `ключ ${i + 1} · ${Number(k.t).toFixed(2)} с${k.attach ? " · прилеплен к " + k.attach : ""}<br>` + (xs.length ? xs.map((v) => v.msg).join("<br>") : "без нарушений") +
+    "<br><span style='color:#8a909c'>тянуть — кисть; колесо — глубина; жёлтый квадрат — локоть</span>");
+}
+const showTip = (e, html) => { const t = $("tip"); t.innerHTML = html; t.style.display = "block"; t.style.left = e.clientX + 14 + "px"; t.style.top = e.clientY + 14 + "px"; };
+const hideTip = () => { $("tip").style.display = "none"; };
+
+// ---------- мышь: шкала ----------
+let tdrag = null;
+tl.addEventListener("mousedown", (e) => {
+  const [x, y] = mpos(e, tl);
+  const i = ED.clip.keys.findIndex((k) => Math.abs(t2x(k.t) - x) < 9 && y > 50 && y < 78);
+  if (i >= 0) { ED.sel = i; tdrag = { key: ED.clip.keys[i], before: snapshot() }; }
+  else { tdrag = { scrub: true }; ED.time = x2t(x); }
+  panel(); draw();
+});
+window.addEventListener("mousemove", (e) => {
+  if (e.target === tl && !tdrag) {
+    const [x] = mpos(e, tl), f = frameAt(x2t(x)), xs = [...ED.issues[f], ...fullAt(f)];
+    xs.length ? showTip(e, `кадр ${f}: ` + xs.map((v) => v.msg).join("<br>")) : hideTip();
+  }
+  if (!tdrag) return;
+  const [x] = mpos(e, tl);
+  if (tdrag.scrub) { ED.time = x2t(x); draw(); return; }
+  tdrag.key.t = C.r3(Math.round(x2t(x) * C.FPS) / C.FPS); ED.time = Number(tdrag.key.t); recompute();
+});
+window.addEventListener("mouseup", () => {
+  if (tdrag && tdrag.key) {
+    ED.clip.keys.sort((a, b) => a.t - b.t); ED.sel = ED.clip.keys.indexOf(tdrag.key);
+    if (tdrag.before !== snapshot()) { ED.undo.push(tdrag.before); ED.redo = []; changed("ключ сдвинут по времени"); }
+  }
+  tdrag = null;
 });
 
-// ---- проигрывание, клавиши ----
+// ---------- клавиши, проигрывание ----------
 let last = 0;
 function tick(ts) {
-  if (S.playing) {
-    const dt = last ? ((ts - last) / 1000) * +$("speed").value : 0;
-    S.ptime = ((S.ptime ?? S.frames[S.cur].t) + dt) % S.clip.T;
-    S.cur = Math.round((S.ptime / S.clip.T) * (S.frames.length - 1)); draw();
+  if (ED.playing) {
+    const dt = last ? (ts - last) / 1000 : 0; ED.time += dt * Number($("speed").value);
+    if (ED.time > ED.clip.T) ED.time = 0; draw();
   }
   last = ts; requestAnimationFrame(tick);
 }
-function play(on) { S.playing = on ?? !S.playing; S.ptime = undefined; $("play").textContent = S.playing ? "■" : "▶"; if (!S.playing) inspector(); }
-document.addEventListener("keydown", (e) => {
-  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
-  const c = e.ctrlKey || e.metaKey;
-  if (e.code === "Space") { e.preventDefault(); play(); }
-  else if (e.key === "ArrowRight") { S.cur = Math.min(S.frames.length - 1, S.cur + 1); draw(); inspector(); }
-  else if (e.key === "ArrowLeft") { S.cur = Math.max(0, S.cur - 1); draw(); inspector(); }
-  else if (c && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); }
-  else if (c && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); }
-  else if (c && e.key.toLowerCase() === "s") { e.preventDefault(); save(); }
-  else if (e.key === "Delete" || e.key === "Backspace") delKey();
-  else if (e.key.toLowerCase() === "k" || e.key.toLowerCase() === "л") addKey(S.frames[S.cur].t);
+const play = (on = !ED.playing) => { ED.playing = on; $("play").textContent = on ? "■" : "▶"; };
+window.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") { if (e.key === "Enter" && e.target.id === "cmd") command(); return; }
+  const ctrl = e.ctrlKey || e.metaKey;
+  if (ctrl && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+  else if (ctrl && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); }
+  else if (ctrl && e.key.toLowerCase() === "s") { e.preventDefault(); save(); }
+  else if (e.key === " ") { e.preventDefault(); play(); }
+  else if (e.key === "ArrowLeft" || e.key === "ArrowRight") { e.preventDefault(); play(false); const f = frameAt(ED.time) + (e.key === "ArrowLeft" ? -1 : 1); ED.time = ED.traj.frames[Math.max(0, Math.min(ED.traj.n - 1, f))].t; draw(); }
+  else if ((e.key === "Delete" || e.key === "Backspace") && ED.sel != null) { const i = ED.sel; ED.sel = null; edit(() => ED.clip.keys.splice(i, 1), "ключ удалён"); }
+  else if (e.key.toLowerCase() === "k" || e.key.toLowerCase() === "л") { const p = C.toScreen(C.fk(ED.traj.at(ED.time).q).ball); addKey([C.r3(sideX(p[0])), C.r3(p[1])]); }
 });
 
-// ---- кнопки ----
-const say = (lines) => { S.log = lines.join("\n"); inspector(); };
+// ---------- кнопки ----------
 $("undo").onclick = undo; $("redo").onclick = redo; $("save").onclick = save; $("play").onclick = () => play();
-$("onion").onclick = () => { view.onion = !view.onion; $("onion").classList.toggle("on", view.onion); draw(); };
-$("mirror").onclick = () => edit(() => mirror(S.clip));
-$("fix").onclick = () => { let d; edit(() => { d = autofix(S.clip, S.checks[S.cur]?.length ? S.cur : undefined); }); say(d.length ? ["Поправлено:", ...d] : ["Нечего поправлять"]); };
-$("addprop").onchange = (e) => { const kind = e.target.value; e.target.value = ""; if (!kind) return;
-  edit(() => { const ps = (S.clip.props = S.clip.props || []); let i = 1; while (ps.some((p) => p.id === kind + i)) i++; ps.push({ id: kind + i, kind, ndc: [-0.25, 0], depth: 0.4 }); S.selProp = kind + i; }); };
-$("tpl").onchange = (e) => { const id = e.target.value; e.target.value = ""; if (!id) return;
-  let n = prompt("Имя нового клипа (файл tools/anim/motion/<имя>.json):", id === "empty" ? "new_clip" : id); if (!n) return;
-  n = n.replace(/[^\w-]/g, "_"); load(n, JSON.stringify(TEMPLATES[id].clip()), false); begin(); commit(); history.replaceState(null, "", `?clip=${n}`); };
-$("clips").onchange = (e) => openClip(e.target.value);
+$("onion").onclick = () => { ED.onion = !ED.onion; $("onion").classList.toggle("on", ED.onion); draw(); };
+$("mirror").onclick = () => edit(() => C.mirrorClip(ED.clip), "зеркало: теперь " + (ED.clip.side === "r" ? "левая" : "правая") + " рука");
+$("new").onclick = () => { const b = snapshot(); ED.name = ""; ED.clip = C.emptyClip(); ED.undo.push(b); ED.redo = []; ED.sel = null; ED.time = 0; changed("новый клип"); };
 $("open").onclick = () => $("file").click();
-$("file").onchange = async (e) => { const f = e.target.files[0]; if (f) { load(f.name.replace(/\.json$/, ""), await f.text(), false); begin(); commit(); } };
-async function runCommand() {
-  const s = $("ai").value.trim(); if (!s) return;
-  let d; edit(() => { d = command(S.clip, s, S.sel); });
-  if (!d) S.undo.pop();
-  if (S.server) fetch("api/ai", { method: "POST", body: JSON.stringify({ clip: S.name, text: s, done: d }) });
-  say(d ? ["Команда:", ...d] : [S.server ? "Передано сессии ИИ (tools/anim/editor_inbox.jsonl); правка появится, когда она изменит файл" : "Не понял команду. Понимаю: медленнее/быстрее, выше/ниже/левее/правее, ближе/дальше, замах/бросок/всё, зеркало, поправь"]);
-  $("ai").value = "";
-}
-$("aigo").onclick = runCommand; $("ai").addEventListener("keydown", (e) => e.key === "Enter" && runCommand());
-$("full").onclick = async () => {
-  if (!S.server) { say(["Полная проверка нужна локально: python3 tools/anim/editor_server.py, затем открыть http://127.0.0.1:8765/ — или попросить сессию ИИ: tools/anim/pipeline.sh check"]); return; }
-  await save(); status("полная проверка идёт (keyed.py → check.py), это минуты…");
-  const r = await (await fetch(`api/check?clip=${S.name}`, { method: "POST" })).json();
-  S.full = r; draw(); say([r.ok ? "Полная проверка:" : "Полная проверка не прошла:", ...(r.summary || []), r.error || ""]);
-  status(r.ok ? "полная проверка готова — оранжевые кадры на таймлайне" : "полная проверка упала", r.ok ? "green" : "red");
+$("file").onchange = async () => { const f = $("file").files[0]; if (!f) return; const b = snapshot(); ED.clip = C.parseClip(await f.text()); ED.name = f.name; ED.undo.push(b); ED.sel = null; changed("открыт " + f.name); };
+$("clips").onchange = () => load($("clips").value);
+$("T").onchange = () => edit(() => { ED.clip.T = Math.max(0.1, Number($("T").value)); }, "длительность");
+$("rel").onchange = () => edit(() => { if ($("rel").value === "") delete ED.clip.release_t; else ED.clip.release_t = Number($("rel").value); }, "выпуск");
+$("addtg").onchange = () => {
+  const kind = $("addtg").value; $("addtg").value = ""; if (!kind) return;
+  edit(() => {
+    ED.clip.targets = ED.clip.targets || [];
+    const n = ED.clip.targets.filter((t) => t.kind === kind).length + 1, ru = { lever: "рычаг", door: "ручка двери", item: "предмет" }[kind];
+    const t = { id: kind + n, kind, label: ru + (n > 1 ? " " + n : ""), ndc: [0.25, kind === "item" ? -0.35 : 0.1], depth: 0.4 };
+    if (kind === "lever") t.throw = [0, -0.35];
+    ED.clip.targets.push(t);
+  }, "предмет поставлен: тяните его; ключ рядом с ним прилипнет");
 };
-
-// ---- сервер (editor_server.py): сохранение в файл, слежение за правками ИИ ----
-async function watch() {
-  if (!S.server || !S.name) return;
+function fixAll() {
+  let n = 0;
+  edit(() => {
+    for (let pass = 0; pass < 6; pass++) {
+      const tr = C.trajectory(ED.clip, ED.cache), is = C.quickCheck(ED.clip, tr);
+      const x = is.flat().find((v) => v.sev === "red" && v.fix);
+      if (!x || !C.applyFix(ED.clip, tr, x.fix)) break; n++;
+    }
+  });
+  say(n ? `поправлено: ${n}` : "нечего поправлять автоматически");
+}
+$("fix").onclick = fixAll;
+async function fullCheck() {
+  if (!ED.server) { say("полная проверка — в редакторе через tools/anim/editor_server.py (или в сессии ИИ: tools/anim/pipeline.sh check)"); return; }
+  await save(); say("полная проверка идёт…"); $("full").disabled = true;
   try {
-    const r = await fetch(`clips/${S.name}.json`, { cache: "no-store" });
-    if (!r.ok) return;
-    const t = await r.text();
-    if (S.diskText && t !== S.diskText && t !== text()) { S.diskText = t; begin(); restore(t); say(["Файл изменён снаружи (сессия ИИ) — подхвачено, Ctrl+Z отменит"]); }
-    else S.diskText = t;
-  } catch { /* сервер ушёл */ }
+    const r = await (await fetch("api/check?name=" + encodeURIComponent(ED.name), { method: "POST" })).json();
+    ED.full = (r.rows || []).map((x) => ({ f: frameAt(x.t), msg: x.msg }));
+    ED.fullInfo = r.summary || ""; say(r.summary || "готово"); panel(); draw();
+  } finally { $("full").disabled = false; }
+}
+$("full").onclick = fullCheck;
+async function command() {
+  const text = $("cmd").value.trim(); if (!text) return;
+  let done = [];
+  edit(() => { done = C.localCommand(ED.clip, text, ED.sel); });
+  if (done.length) { say("сделано: " + done.join(", ") + " (Ctrl+Z — отменить)"); $("cmd").value = ""; return; }
+  if (ED.server) {
+    await fetch("api/ai", { method: "POST", body: JSON.stringify({ name: ED.name, text }) });
+    say("передано ИИ-сессии (tools/anim/editor_inbox.md); правка файла появится здесь сама"); $("cmd").value = "";
+  } else say("не понял; полные команды — при запуске через editor_server.py (их выполняет ИИ-сессия)");
 }
 
-$("hint").innerHTML = `<b>С чего начать</b><br>1. «Новый…» → заготовка (взмах, рычаг, дверь, взять предмет) — или<br>2. двойной щелчок по таймлайну — ключ в этот момент,<br>3. тянуть ромб на экране — где кисть, колесо — ближе/дальше,<br>4. пробел — играть. Красные кадры — наведи, «Поправить» исправит.`;
-for (const [id, t] of Object.entries(TEMPLATES)) $("tpl").insertAdjacentHTML("beforeend", `<option value=${id}>${t.name}</option>`);
-window.addEventListener("resize", draw);
-window.EDITOR = { S, text, undo, redo, save, load, openClip, addKey, solve, view, ready: false };
-(async () => {
-  try { S.server = (await fetch("api/ping")).ok; } catch { S.server = false; }
+// ИИ-сессия правит файл клипа → редактор подхватывает изменение как обычную правку (отменяется Ctrl+Z).
+async function watch() {
+  if (!ED.server || !ED.name || ED.dirty) return;
+  try {
+    const r = await fetch("api/clip?name=" + encodeURIComponent(ED.name), { method: "HEAD" });
+    const m = Number(r.headers.get("X-Mtime") || 0);
+    if (m && ED.mtime && m !== ED.mtime) {
+      const text = await (await fetch("api/clip?name=" + encodeURIComponent(ED.name))).text();
+      ED.mtime = m; ED.undo.push(snapshot()); ED.redo = []; ED.clip = C.parseClip(text); ED.full = []; recompute(); ED.dirty = false;
+      say("файл изменён снаружи (ИИ) — подхвачено; Ctrl+Z — отменить");
+    }
+  } catch (e) { /* сервер остановлен */ }
+}
+
+async function init() {
   let list = [];
-  try { list = await (await fetch("clips/index.json", { cache: "no-store" })).json(); } catch { /* пусто */ }
-  for (const n of list) $("clips").insertAdjacentHTML("beforeend", `<option>${n}</option>`);
-  const q = new URLSearchParams(location.search).get("clip") || list[0] || "new_clip";
-  $("clips").value = q;
-  await openClip(q);
-  if (S.server) setInterval(watch, 1500);
-  requestAnimationFrame(tick);
-  window.EDITOR.ready = true;
-})();
+  try { const r = await fetch("api/clips"); if (r.ok) { list = await r.json(); ED.server = true; } } catch (e) { /* статическая сборка */ }
+  if (!ED.server) { try { list = await (await fetch("clips/index.json")).json(); } catch (e) { list = []; } }
+  $("clips").innerHTML = '<option value="">— клип —</option>' + list.map((n) => `<option>${n}</option>`).join("");
+  $("full").title += ED.server ? "" : " — недоступно в опубликованной сборке";
+  window.addEventListener("resize", layout);
+  recompute(); layout(); requestAnimationFrame(tick);
+  const want = new URLSearchParams(location.search).get("clip");
+  if (want) { $("clips").value = want; await load(want); }
+  setInterval(watch, 1500);
+  ED.ready = true;
+}
+ED.api = { load, save, undo, redo, addKey, fixAll, command, recompute };
+init();

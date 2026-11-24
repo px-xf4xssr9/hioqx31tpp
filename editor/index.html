@@ -4,56 +4,62 @@
 <meta charset="utf-8">
 <meta name="robots" content="noindex,nofollow">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GEngine · редактор анимаций</title>
+<title>GEngine · редактор анимаций рук</title>
 <style>
-  :root { color-scheme: dark; --bg: #0f1216; --pan: #1a1f26; --tx: #dfe6ec; --dim: #8b97a3; --ac: #f1c40f; --bad: #e74c3c; --ok: #2ecc71; }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--tx); font: 13px system-ui, sans-serif; height: 100vh; display: grid;
-    grid-template: "bar bar" auto "view insp" 1fr "tl tl" auto "cmd cmd" auto / 1fr 260px; }
-  #bar { grid-area: bar; display: flex; flex-wrap: wrap; gap: 6px; padding: 6px; background: var(--pan); align-items: center; }
-  #bar .sp { flex: 1; }
-  button, select, input { background: #262d36; color: var(--tx); border: 1px solid #39424d; border-radius: 4px; padding: 4px 8px; font: inherit; }
-  button:hover { border-color: var(--ac); }
-  button.on { background: #3b3416; border-color: var(--ac); }
-  #view { grid-area: view; width: 100%; height: 100%; min-height: 240px; display: block; cursor: crosshair; }
-  #insp { grid-area: insp; background: var(--pan); padding: 8px; overflow: auto; }
-  #insp label { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin: 4px 0; }
-  #insp input[type=number] { width: 70px; }
-  #insp input[type=range] { width: 110px; }
-  #insp h3 { margin: 10px 0 4px; font-size: 13px; color: var(--ac); }
-  #tlwrap { grid-area: tl; position: relative; background: var(--pan); padding: 4px 6px; }
-  #tl { width: 100%; height: 74px; display: block; }
-  #cmd { grid-area: cmd; display: flex; gap: 6px; padding: 6px; background: var(--pan); border-top: 1px solid #262d36; }
-  #cmd input { flex: 1; }
-  #status { color: var(--dim); }
-  #tip { position: fixed; pointer-events: none; background: #000d; border: 1px solid var(--bad); padding: 6px 8px; border-radius: 4px; max-width: 360px; display: none; z-index: 5; }
-  #hint { position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%); background: #000b; padding: 14px 18px; border-radius: 8px; max-width: 420px; line-height: 1.5; display: none; }
-  .red { color: var(--bad); } .green { color: var(--ok); }
-  #log { color: var(--dim); font-size: 12px; white-space: pre-wrap; margin-top: 8px; }
+:root{--bg:#16181c;--pan:#1f2228;--line:#30343c;--tx:#e6e6e6;--dim:#8a909c;--acc:#5aa9ff;--red:#ff5a5a;--yel:#f2c14e;--ok:#4ecb71}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--tx);font:13px system-ui,sans-serif}
+#app{display:grid;grid-template-columns:1fr 300px;grid-template-rows:auto 1fr 120px;height:100vh}
+#bar{grid-column:1/3;display:flex;flex-wrap:wrap;gap:4px;padding:6px;background:var(--pan);border-bottom:1px solid var(--line);align-items:center}
+button,select,input{background:#2a2e36;color:var(--tx);border:1px solid var(--line);border-radius:4px;padding:4px 8px;font:inherit}
+button:hover{border-color:var(--acc)}button.on{background:#284a70}
+.sep{width:1px;height:20px;background:var(--line);margin:0 4px}
+#view{position:relative;overflow:hidden}#cv{width:100%;height:100%;display:block;cursor:crosshair}
+#side{grid-row:2/4;grid-column:2;background:var(--pan);border-left:1px solid var(--line);padding:8px;overflow:auto}
+#side h3{margin:10px 0 4px;font-size:12px;color:var(--dim);text-transform:uppercase}
+#tl{grid-column:1;background:#1a1c21;border-top:1px solid var(--line);position:relative}#tlc{width:100%;height:100%;display:block}
+.row{display:flex;gap:6px;align-items:center;margin:3px 0}.row label{width:110px;color:var(--dim)}.row input[type=number]{width:64px}
+#issues div{padding:3px 4px;border-radius:3px;margin:2px 0;cursor:pointer}#issues .red{background:#4a1f22}#issues .warn{background:#463a1c}
+#hint{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);max-width:460px;background:#000a;padding:14px 18px;border-radius:8px;line-height:1.5;pointer-events:none}
+#tip{position:fixed;background:#000d;padding:4px 8px;border-radius:4px;pointer-events:none;display:none;max-width:420px;z-index:9}
+#status{position:absolute;left:8px;bottom:6px;color:var(--dim);pointer-events:none}
+#msg{color:var(--yel);min-height:16px}#cmd{width:100%}
 </style>
 </head>
 <body>
-<div id="bar">
-  <select id="clips" title="Клипы из tools/anim/motion"></select>
-  <select id="tpl" title="Новый клип из заготовки"><option value="">Новый…</option></select>
-  <button id="open" title="Открыть JSON с диска">Открыть</button>
-  <button id="save" title="Сохранить (Ctrl+S): через editor_server.py — в файл, иначе скачать">Сохранить</button>
+<div id="app">
+ <div id="bar">
+  <select id="clips" title="Клип из tools/anim/motion"></select>
+  <button id="new" title="Пустой клип">Новый</button>
+  <button id="open" title="Открыть JSON с диска">Открыть…</button><input id="file" type="file" accept=".json" hidden>
+  <button id="save" title="Сохранить (Ctrl+S): в файл клипа, если редактор запущен через editor_server.py, иначе — скачать">Сохранить</button>
+  <span class="sep"></span>
   <button id="undo" title="Отменить (Ctrl+Z)">↶</button><button id="redo" title="Вернуть (Ctrl+Shift+Z)">↷</button>
-  <button id="play" title="Играть / стоп (пробел)">▶</button>
-  <select id="speed" title="Скорость проигрывания"><option>0.25</option><option>0.5</option><option selected>1</option><option>2</option></select>
+  <span class="sep"></span>
+  <button id="play" title="Играть/стоп (пробел)">▶</button>
+  <select id="speed" title="Скорость проигрывания"><option>0.1</option><option>0.25</option><option>0.5</option><option selected>1</option></select>
   <button id="onion" class="on" title="Полупрозрачные соседние кадры">Луковица</button>
-  <button id="mirror" title="Зеркало: левая ↔ правая рука">Зеркало</button>
-  <select id="addprop" title="Поставить предмет-цель"><option value="">+ предмет</option><option value="lever">рычаг</option><option value="door">ручка двери</option><option value="item">предмет на столе</option></select>
+  <button id="mirror" title="Зеркало: левая ↔ правая рука">Зеркало Л↔П</button>
+  <span class="sep"></span>
+  <select id="addtg" title="Поставить предмет-цель в кадр; ключ рядом с ним прилипает"><option value="">+ предмет…</option><option value="lever">рычаг</option><option value="door">ручка двери</option><option value="item">предмет на столе</option></select>
+  <span class="sep"></span>
   <button id="fix" title="Ближайшая допустимая поза для красных кадров">Поправить</button>
-  <button id="full" title="Полная проверка: keyed.py + check.py (кожа, растяжение, форма кисти) — нужен editor_server.py">Полная проверка</button>
-  <span class="sp"></span><span id="status"></span>
-  <input id="file" type="file" accept=".json" hidden>
+  <button id="full" title="tools/anim/pipeline.sh check: кожа, растяжение, форма кисти (нужен editor_server.py)">Полная проверка</button>
+ </div>
+ <div id="view"><canvas id="cv"></canvas><div id="hint"></div><div id="status"></div></div>
+ <div id="side">
+  <h3>Ключ</h3><div id="keyp"></div>
+  <h3>Клип</h3>
+  <div class="row"><label title="Длительность, с">длительность, с</label><input id="T" type="number" step="0.05" min="0.1"></div>
+  <div class="row"><label title="Момент выпуска шара, с">выпуск, с</label><input id="rel" type="number" step="0.01" min="0"></div>
+  <div class="row"><label>рука</label><span id="side_"></span></div>
+  <h3>Проверки</h3><div id="sum"></div><div id="issues"></div>
+  <h3>Команда (ИИ)</h3>
+  <input id="cmd" placeholder="замах медленнее, кисть выше" title="Простые слова (медленнее/быстрее, выше/ниже, левее/правее, ближе/дальше, замах/бросок) делаются сразу; остальное получает ИИ-сессия">
+  <div id="msg"></div>
+ </div>
+ <div id="tl"><canvas id="tlc"></canvas></div>
 </div>
-<canvas id="view"></canvas>
-<div id="insp"></div>
-<div id="tlwrap"><canvas id="tl"></canvas><div id="hint"></div></div>
-<div id="cmd"><input id="ai" placeholder="Команда: «замах медленнее, кисть выше», «поправь», «всё ближе» — Enter" title="Простые команды выполняются сразу; с editor_server.py команда уходит и в сессию ИИ"><button id="aigo">Выполнить</button></div>
 <div id="tip"></div>
-<script type="module" src="editor.js?b=11240313"></script>
+<script type="module" src="editor.js"></script>
 </body>
 </html>
