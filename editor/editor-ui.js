@@ -121,14 +121,14 @@ function engineCheck() {
   ED.engineDone = false;
   if (!window.gengineEditorEval || !window.gengineEditorOut) return;
   const fr = ED.traj.frames, d = [ED.clip.side === "r" ? 1 : 0, ...C.leverNums(ED.clip), fr.length];
-  for (const f of fr) { const g = C.gripAt(ED.clip, f.t); d.push(...f.q, g.w, g.phi); }
+  for (const f of fr) { const g = C.gripAt(ED.clip, f.t); d.push(...f.q, g.w, g.phi, g.ap, g.cl); }
   const r = window.gengineEditorEval(new Float32Array(d));
   if (!r || !r.length) return;
   ED.engineDone = true;
   const deg = (v) => `${Math.round(v)}°`;
   fr.forEach((f, i) => {
     const [flex, dev, tw, out, reach, miss, pen, gap] = r.slice(i * 8, i * 8 + 8), w = C.gripAt(ED.clip, f.t).w, is = ED.issues[i];
-    if (out > 0.5) is.push({ sev: "red", msg: `запястье вывернуто: сгиб ${deg(flex)} (±80°), отклонение ${deg(dev)} (−30…20°), скрутка ${deg(tw)} (−80…85°)` });
+    if (out > 0.5) is.push({ sev: "red", msg: `запястье вывернуто: сгиб ${deg(flex)} (±80°), отклонение ${deg(dev)} (−30…20°), скрутка ${deg(tw)} (−80…85°)`, fix: w > 0.5 ? { op: "leverSide", d: ED.clip.side === "r" ? 0.06 : -0.06 } : undefined });
     if (w < 0.99) return;
     if (reach > 1.0) is.push({ sev: "red", msg: `рука не дотягивается до ручки: не хватает ${Math.round((reach - 1) * 100)}% длины руки — рычаг ближе`, fix: { op: "leverCloser", k: reach } });
     else if (miss > 5) is.push({ sev: "red", msg: `кисть сорвалась с ручки на ${miss.toFixed(0)} мм` });
@@ -218,7 +218,7 @@ function draw() {
   const out = window.gengineEditorOut;
   if (ED.sel != null && out) put([out[0], out[1]], out[2], 6, 1); // локоть модели: тянуть — направление предплечья
   const gp = C.gripAt(ED.clip, ED.time);
-  ED.frameData = new Float32Array([ED.clip.side === "r" ? 1 : 0, ...cur.q, ED.quality, gp.w, gp.phi, ...C.leverNums(ED.clip), gz.length / 6, ...gz]);
+  ED.frameData = new Float32Array([ED.clip.side === "r" ? 1 : 0, ...cur.q, ED.quality, gp.w, gp.phi, gp.ap, gp.cl, ...C.leverNums(ED.clip), gz.length / 6, ...gz]);
   // подписи поверх: номера ключей и кольцо выбранного/красного
   g.font = "600 12px system-ui"; g.lineWidth = 2;
   ED.clip.keys.forEach((k, i) => {
@@ -505,8 +505,8 @@ $("addtg").onchange = () => {
   edit(() => {
     ED.clip.targets = ED.clip.targets || [];
     const n = ED.clip.targets.filter((t) => t.kind === kind).length + 1, ru = { lever: "рычаг", door: "ручка двери", item: "предмет" }[kind];
-    const t = { id: kind + n, kind, label: ru + (n > 1 ? " " + n : ""), ndc: [kind === "lever" ? 0.1 : 0.25, kind === "item" ? -0.35 : 0.1], depth: kind === "lever" ? 0.34 : 0.4 };
-    if (kind === "lever") t.throw = [0, -0.35];
+    const t = { id: kind + n, kind, label: ru + (n > 1 ? " " + n : ""), ndc: [kind === "lever" ? (ED.clip.side === "r" ? 0.12 : -0.12) : 0.25, kind === "item" ? -0.35 : kind === "lever" ? 0.45 : 0.1], depth: kind === "lever" ? 0.34 : 0.4 };
+    if (kind === "lever") t.throw = [0, -0.9];
     ED.clip.targets.push(t);
   }, "предмет поставлен: тяните его; ключ рядом с ним прилипнет");
 };

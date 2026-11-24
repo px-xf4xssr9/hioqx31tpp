@@ -260,6 +260,11 @@ export function applyFix(clip, traj, fix) {
     const d = K[bi].depth || [0.2, 0.3]; K[bi].depth = [Math.max(d[0], NEAR + 0.04), Math.max(d[1], NEAR + 0.1)];
     return true;
   }
+  if (fix.op === "leverSide") { // рычаг ближе к своей руке по экрану: запястье меньше выворачивается
+    const L = lever(clip); if (!L) return false;
+    L.ndc = [r3(Number(L.ndc[0]) + fix.d), Number(L.ndc[1])];
+    return true;
+  }
   if (fix.op === "leverCloser") { // рычаг ближе к плечу: та же точка на экране, меньше глубина
     const L = lever(clip); if (!L) return false;
     L.depth = r3(Math.max(NEAR + 0.08, Number(L.depth ?? 0.4) / (fix.k * 1.04)));
@@ -350,17 +355,28 @@ export function parseClip(text) {
  *  него, если дальше есть свои ключи, кисть отпускает ручку. Рычаг после хода остаётся внизу. */
 export function lever(clip) { return (clip.targets || []).find((t) => t.kind === "lever" && t.throw) || null; }
 export function gripAt(clip, t) {
-  const L = lever(clip); if (!L) return { w: 0, phi: 0 };
+  const L = lever(clip); if (!L) return { w: 0, phi: 0, ap: 0, cl: 0 };
   const ks = clip.keys.map((k) => ({ t: Number(k.t), a: k.attach })).sort((a, b) => a.t - b.t);
   const g = ks.find((k) => k.a === L.id), e = [...ks].reverse().find((k) => k.a === L.id + "@end");
-  if (!g) return { w: 0, phi: 0 };
-  const sm = (x) => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };
+  if (!g) return { w: 0, phi: 0, ap: 0, cl: 0 };
+  // гладкий ход (минимальный рывок, Flash & Hogan 1985): 10u³ − 15u⁴ + 6u⁵
+  const mj = (x) => { x = Math.min(1, Math.max(0, x)); return x * x * x * (10 + x * (6 * x - 15)); };
+  // подход к ручке (Jeannerod 1984): кисть разворачивается и идёт к ручке во второй части пути,
+  // пальцы раскрываются шире ручки к ~70% подхода и смыкаются к касанию
+  const prev = ks.filter((k) => k.t < g.t - 1e-6).pop(), t0 = prev ? prev.t : Math.max(0, g.t - 0.5);
+  const u = (t - t0) / Math.max(g.t - t0, 1e-3);
+  let w = mj((u - 0.35) / 0.65), ap = u < 0.7 ? mj(u / 0.7) : 1 - mj((u - 0.7) / 0.3), cl = u < 0.7 ? 0 : mj((u - 0.7) / 0.3);
+  if (t >= g.t) { w = 1; ap = 0; cl = 1; }
+  // тяга: сначала хват дожимается (~80 мс), потом рычаг идёт гладко до конца хода
   const te = e && e.t > g.t ? e.t : null;
-  const after = te != null && ks.some((k) => k.t > te + 1e-6 && !k.a);
-  let w = sm((t - (g.t - 0.12)) / 0.12);
-  if (after) w *= 1 - sm((t - (te + 0.05)) / 0.15);
-  const phi = te == null ? 0 : sm((t - g.t) / (te - g.t));
-  return { w, phi };
+  const set = Math.min(0.08, te != null ? (te - g.t) / 3 : 0.08);
+  const phi = te == null ? 0 : mj((t - g.t - set) / (te - g.t - set));
+  // отпускание, если дальше есть свои ключи: пальцы раскрываются, кисть уходит с ручки
+  if (te != null && ks.some((k) => k.t > te + 1e-6 && !k.a)) {
+    const r = mj((t - te - 0.05) / 0.2);
+    cl *= 1 - r; ap = Math.max(ap, Math.sin(Math.PI * Math.min(1, Math.max(0, r))) * 0.6); w *= 1 - mj((t - te - 0.1) / 0.25);
+  }
+  return { w, phi, ap, cl };
 }
 /** Числа рычага для движка: [есть, ручка в начале x, y, глубина, в конце x, y]. */
 export function leverNums(clip) {
