@@ -12,7 +12,7 @@
 //   window.gengineJournalMode() → 0 читать (две руки держат), 1 писать (карандаш)
 // Записи: assets/journal/entries.json (сюжет и задания) + свои заметки и рисунки игрока — в localStorage.
 (() => {
-  const W = 2048, H = 1463;           // разворот 28 × 20 см (чтение, journal2_spec.json)
+  const W = 2048, H = 1654;           // разворот 26 × 21 см (чтение, journal3_spec.json — по кадрам Uncharted 4)
   const PAGE = W / 2, MX = 96, TOP = 150, LINE = 64;
   const INK = "#1c2747", FONT = "600 50px Caveat, cursive";
   const KEY = "gengine.journal.v2", SPREADS = 12;
@@ -56,9 +56,10 @@
     for (const x0 of [0, PAGE]) {
       for (let y = TOP; y < H - 60; y += LINE) { p.beginPath(); p.moveTo(x0 + 50, y); p.lineTo(x0 + PAGE - 50, y); p.stroke(); }
     }
-    const gut = p.createLinearGradient(PAGE - 90, 0, PAGE + 90, 0);
-    gut.addColorStop(0, "rgba(0,0,0,0)"); gut.addColorStop(0.5, "rgba(60,40,10,.35)"); gut.addColorStop(1, "rgba(0,0,0,0)");
-    p.fillStyle = gut; p.fillRect(PAGE - 90, 0, 180, H);
+    // у корешка — узкая тень сгиба (сам прогиб даёт сетка страницы в движке)
+    const gut = p.createLinearGradient(PAGE - 40, 0, PAGE + 40, 0);
+    gut.addColorStop(0, "rgba(0,0,0,0)"); gut.addColorStop(0.5, "rgba(60,40,10,.28)"); gut.addColorStop(1, "rgba(0,0,0,0)");
+    p.fillStyle = gut; p.fillRect(PAGE - 40, 0, 80, H);
     const vg = p.createRadialGradient(W / 2, H / 2, H * 0.45, W / 2, H / 2, W * 0.7);
     vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(80,50,20,.35)");
     p.fillStyle = vg; p.fillRect(0, 0, W, H);
