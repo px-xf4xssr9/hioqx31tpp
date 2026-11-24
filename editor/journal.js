@@ -7,22 +7,37 @@
 //   window.gengineInk(u, v, down) ← кончик ручки на развороте (0..1), каждый кадр, пока дневник открыт
 //   window.gengineJournalOpen(0|1) ← дневник открылся/закрылся (мир на паузе, мышь свободна)
 //   window.gengineJournalCanvas, window.gengineJournalDirty ← холст разворота и «перерисован» (Rust сбрасывает)
+//   window.gengineJournalFlip(±1) ← Rust начал переворот листа: под ним — следующий разворот, сам лист —
+//     window.gengineJournalSheet (левая половина — лицо, правая — оборот); gengineJournalFlipDone() — лист лёг
+//   window.gengineJournalMode() → 0 читать (две руки держат), 1 писать (карандаш)
 // Записи: assets/journal/entries.json (сюжет и задания) + свои заметки и рисунки игрока — в localStorage.
 (() => {
-  const W = 2048, H = 1582;           // разворот 22 × 17 см
+  const W = 2048, H = 1654;           // разворот 26 × 21 см (чтение, journal3_spec.json — по кадрам Uncharted 4)
   const PAGE = W / 2, MX = 96, TOP = 150, LINE = 64;
   const INK = "#1c2747", FONT = "600 50px Caveat, cursive";
-  const KEY = "gengine.journal.v1";
-  const J = { open: 0, toggle: 0, px: 0, py: 0, down: 0, auto: null, autoQ: [], lastInk: null, stroke: null };
-  const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
+  const KEY = "gengine.journal.v2", SPREADS = 12;
+  const J = { open: 0, toggle: 0, px: 0, py: 0, down: 0, auto: null, autoQ: [], lastInk: null, stroke: null, flip: 0, mode: 0 };
+  const load = () => {
+    try {
+      const v2 = JSON.parse(localStorage.getItem(KEY));
+      if (v2) return v2;
+      const v1 = JSON.parse(localStorage.getItem("gengine.journal.v1"));  // прежний формат: один разворот
+      if (v1) return { ...v1, s: 0, strokes: (v1.strokes || []).map((p) => ({ s: 0, pts: p })), texts: (v1.texts || []).map((t) => ({ ...t, s: 0 })),
+        line: { "0l": v1.line?.l || 0, "0r": v1.line?.r || 0 } };
+    } catch {}
+    return {};
+  };
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(D)); } catch {} };
-  const D = Object.assign({ strokes: [], texts: [], written: [], done: [], line: { l: 0, r: 0 } }, load());
+  const D = Object.assign({ s: 0, strokes: [], texts: [], written: [], done: [], line: {} }, load());
   let entries = [];
 
   const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
   const g = cv.getContext("2d");
   const paper = document.createElement("canvas"); paper.width = W; paper.height = H;
   window.gengineJournalCanvas = cv;
+  const sheet = document.createElement("canvas"); sheet.width = W; sheet.height = H;
+  window.gengineJournalSheet = sheet;
+  const tmp = document.createElement("canvas"); tmp.width = W; tmp.height = H;
   const dirty = () => (window.gengineJournalDirty = true);
 
   // бумага: тёплый тон, волокна, линовка, тень у корешка, края темнее
@@ -41,50 +56,78 @@
     for (const x0 of [0, PAGE]) {
       for (let y = TOP; y < H - 60; y += LINE) { p.beginPath(); p.moveTo(x0 + 50, y); p.lineTo(x0 + PAGE - 50, y); p.stroke(); }
     }
-    const gut = p.createLinearGradient(PAGE - 90, 0, PAGE + 90, 0);
-    gut.addColorStop(0, "rgba(0,0,0,0)"); gut.addColorStop(0.5, "rgba(60,40,10,.35)"); gut.addColorStop(1, "rgba(0,0,0,0)");
-    p.fillStyle = gut; p.fillRect(PAGE - 90, 0, 180, H);
+    // у корешка — узкая тень сгиба (сам прогиб даёт сетка страницы в движке)
+    const gut = p.createLinearGradient(PAGE - 40, 0, PAGE + 40, 0);
+    gut.addColorStop(0, "rgba(0,0,0,0)"); gut.addColorStop(0.5, "rgba(60,40,10,.28)"); gut.addColorStop(1, "rgba(0,0,0,0)");
+    p.fillStyle = gut; p.fillRect(PAGE - 40, 0, 80, H);
     const vg = p.createRadialGradient(W / 2, H / 2, H * 0.45, W / 2, H / 2, W * 0.7);
     vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(80,50,20,.35)");
     p.fillStyle = vg; p.fillRect(0, 0, W, H);
   }
 
-  function setFont() { g.font = FONT; g.fillStyle = INK; g.textBaseline = "alphabetic"; }
+  let gg = g;  // куда рисуем: разворот на экране или вспомогательный холст при перевороте
+  function setFont() { gg.font = FONT; gg.fillStyle = INK; gg.textBaseline = "alphabetic"; }
   // небольшая неровность почерка: наклон и прыгающая базовая линия, у каждой буквы своя
   function glyph(ch, x, y, k) {
     const j = Math.sin(k * 12.9898) * 43758.5453; const r = j - Math.floor(j);
-    g.save(); g.translate(x, y + (r - 0.5) * 4); g.rotate((r - 0.5) * 0.06); g.fillText(ch, 0, 0); g.restore();
+    gg.save(); gg.translate(x, y + (r - 0.5) * 4); gg.rotate((r - 0.5) * 0.06); gg.fillText(ch, 0, 0); gg.restore();
   }
   function textAt(t, x, y) {
     setFont(); let cx = x, k = x * 0.37 + y;
-    for (const ch of t) { glyph(ch, cx, y, k++); cx += g.measureText(ch).width; }
+    for (const ch of t) { glyph(ch, cx, y, k++); cx += gg.measureText(ch).width; }
     return cx;
   }
   function strikeAt(x0, x1, y) {
-    g.strokeStyle = INK; g.lineWidth = 4; g.beginPath(); g.moveTo(x0, y - 16);
-    for (let x = x0; x <= x1; x += 24) g.lineTo(x, y - 16 + Math.sin(x * 0.11) * 3);
-    g.stroke();
+    gg.strokeStyle = INK; gg.lineWidth = 4; gg.beginPath(); gg.moveTo(x0, y - 16);
+    for (let x = x0; x <= x1; x += 24) gg.lineTo(x, y - 16 + Math.sin(x * 0.11) * 3);
+    gg.stroke();
   }
   function inkLine(a, b) {
-    g.strokeStyle = INK; g.lineCap = "round"; g.lineWidth = 3.4;
-    g.beginPath(); g.moveTo(a[0] * W, a[1] * H); g.lineTo(b[0] * W, b[1] * H); g.stroke();
+    gg.strokeStyle = INK; gg.lineCap = "round"; gg.lineWidth = 3.4;
+    gg.beginPath(); gg.moveTo(a[0] * W, a[1] * H); gg.lineTo(b[0] * W, b[1] * H); gg.stroke();
   }
-  function redraw() {
-    g.drawImage(paper, 0, 0);
-    setFont(); g.fillText("Дневник", MX, 96);
+  // разворот s целиком — на холст ctx
+  function drawSpread(ctx, s) {
+    const was = gg; gg = ctx;
+    gg.drawImage(paper, 0, 0);
+    if (s === 0) { setFont(); gg.fillText("Дневник", MX, 96); }
     for (const t of D.texts) {
+      if ((t.s || 0) !== s) continue;
       const x1 = textAt(t.t, t.x, t.y);
       if (t.id && D.done.includes(t.id) && t.struck) strikeAt(t.x, x1, t.y);
     }
-    for (const s of D.strokes) for (let i = 2; i < s.length; i += 2) inkLine([s[i - 2], s[i - 1]], [s[i], s[i + 1]]);
-    dirty();
+    for (const st of D.strokes) { if (st.s !== s) continue; const p = st.pts; for (let i = 2; i < p.length; i += 2) inkLine([p[i - 2], p[i - 1]], [p[i], p[i + 1]]); }
+    gg = was;
   }
+  function redraw() { drawSpread(g, D.s); dirty(); }
+  // переворот: под листом — левая половина старого и правая нового разворота (вперёд) или наоборот;
+  // лист: лицо — уходящая страница, оборот — та, что ляжет
+  window.gengineJournalFlip = (dir) => {
+    const to = D.s + dir;
+    if (to < 0 || to >= SPREADS || J.auto) return false;
+    const sc = sheet.getContext("2d"), H2 = PAGE;
+    drawSpread(tmp.getContext("2d"), to);
+    if (dir > 0) {
+      sc.drawImage(cv, H2, 0, H2, H, 0, 0, H2, H);          // лицо — правая страница сейчас
+      sc.drawImage(tmp, 0, 0, H2, H, H2, 0, H2, H);         // оборот — левая страница следующего
+      g.drawImage(tmp, H2, 0, H2, H, H2, 0, H2, H);         // под листом — правая следующего
+    } else {
+      sc.drawImage(cv, 0, 0, H2, H, 0, 0, H2, H);           // лицо — левая страница сейчас
+      sc.drawImage(tmp, H2, 0, H2, H, H2, 0, H2, H);        // оборот — правая предыдущего
+      g.drawImage(tmp, 0, 0, H2, H, 0, 0, H2, H);           // под листом — левая предыдущего
+    }
+    J.flipTo = to; dirty(); window.gengineJournalSheetDirty = true;
+    return true;
+  };
+  window.gengineJournalFlipDone = () => { if (J.flipTo != null) { D.s = J.flipTo; J.flipTo = null; save(); redraw(); } };
+  window.gengineJournalMode = () => J.mode;
 
   // место для новой строки: левая страница — сюжет и задания, правая — заметки игрока
   // правая страница — там, куда дотягивается рука с ручкой (сетка поз письма: v 0.2…0.8 разворота)
   const R_TOP = TOP + Math.ceil((0.2 * H + 12 - TOP) / LINE) * LINE - 12, R_BOTTOM = 0.8 * H;
   function nextLine(side) {
-    const n = D.line[side]++;
+    const key = D.s + side; D.line[key] = D.line[key] || 0;
+    const n = D.line[key]++;
     const x = (side === "l" ? 0 : PAGE) + MX;
     const y = side === "l" ? TOP + LINE * (n + 1) - 12 : R_TOP + LINE * n;
     return y < (side === "l" ? H - 80 : R_BOTTOM) ? [x, y] : null;
@@ -96,20 +139,30 @@
   function queueText(t, side, id) {
     for (const line of t.split("\n")) {
       const at = nextLine(side); if (!at) return;
-      J.autoQ.push({ kind: "text", t: line, x: at[0], y: at[1], id });
+      J.autoQ.push({ kind: "text", t: line, x: at[0], y: at[1], id, s: D.s });
     }
+  }
+  // в чтении (карандаш не в руке) запись уже сделана — как в Uncharted 4: открыл, а она там
+  function instantText(t, side, id) {
+    for (const line of t.split("\n")) { const at = nextLine(side); if (at) D.texts.push({ t: line, x: at[0], y: at[1], id, s: D.s, task: !!entries.find((e) => e.id === id)?.task }); }
+    if (id && !D.written.includes(id)) D.written.push(id);
+    save(); redraw();
+  }
+  function instantStrike(id) {
+    const t = D.texts.find((e) => e.id === id && e.task); if (t) { t.struck = 1; save(); redraw(); }
   }
   function queueStrike(id) {
     const t = D.texts.find((e) => e.id === id && e.task); if (!t) return;
     setFont(); let w = 0; for (const ch of t.t) w += g.measureText(ch).width;
-    J.autoQ.push({ kind: "strike", x0: t.x, x1: t.x + w, y: t.y, id });
+    J.autoQ.push({ kind: "strike", x0: t.x, x1: t.x + w, y: t.y, id, s: t.s || 0 });
   }
   function autoStep(dt) {
     if (!J.auto && J.autoQ.length) {
-      const a = J.autoQ.shift(); J.auto = Object.assign(a, { s: 0, k: 0, cx: a.x ?? a.x0 });
+      const a = J.autoQ.shift(); J.auto = Object.assign(a, { s0: a.s, s: 0, k: 0, cx: a.x ?? a.x0 });
       if (a.kind === "text") { setFont(); a.adv = [...a.t].map((ch) => g.measureText(ch).width); a.chars = [...a.t]; }
     }
     const a = J.auto; if (!a) return null;
+    if ((a.s0 ?? a.s) !== D.s) { if (!J.flip && !J.flipTo) J.flip = (a.s0 ?? a.s) > D.s ? 1 : -1; return null; }  // запись на другом развороте — сперва долистать
     a.s += dt;
     if (a.s < 0.35) return [(a.x ?? a.x0) / W, (a.y - 10) / H, 0];        // подвести ручку к строке
     const t = a.s - 0.35;
@@ -123,7 +176,7 @@
       glyph(a.chars[a.k], a.cx, a.y, a.cx * 0.37 + a.y); a.cx += a.adv[a.k]; a.k++; dirty();
     }
     if (a.k >= a.chars.length) {
-      D.texts.push({ t: a.t, x: a.x, y: a.y, id: a.id, task: !!(a.id && entries.find((e) => e.id === a.id)?.task) });
+      D.texts.push({ t: a.t, x: a.x, y: a.y, id: a.id, s: a.s0, task: !!(a.id && entries.find((e) => e.id === a.id)?.task) });
       if (a.id && !D.written.includes(a.id)) D.written.push(a.id);
       save(); J.auto = null; return null;
     }
@@ -141,14 +194,14 @@
       if (!e.task) continue;
       const open = !e.after || D.done.includes(e.after);
       if (open && !D.written.includes(e.id) && !J.autoQ.some((q) => q.id === e.id) && J.auto?.id !== e.id) {
-        if (J.open) queueText(e.text, "r", e.id); else if (!hinted.has(e.id)) { hinted.add(e.id); hint("Новая запись в дневнике — J"); }
+        if (J.open) { if (J.mode) queueText(e.text, "r", e.id); else instantText(e.text, "r", e.id); } else if (!hinted.has(e.id)) { hinted.add(e.id); hint("Новая запись в дневнике — J"); }
       }
       if (e.done && kills >= (e.done.kills ?? Infinity) && D.written.includes(e.id) && !D.done.includes(e.id)) {
         D.done.push(e.id); save();
-        if (J.open) queueStrike(e.id); else hint("Задание выполнено — J");
+        if (J.open) { if (J.mode) queueStrike(e.id); else instantStrike(e.id); } else hint("Задание выполнено — J");
       }
     }
-    if (J.open) for (const id of D.done) { const t = D.texts.find((x) => x.id === id && x.task && !x.struck); if (t && !J.autoQ.some((q) => q.kind === "strike" && q.id === id)) queueStrike(id); }
+    if (J.open) for (const id of D.done) { const t = D.texts.find((x) => x.id === id && x.task && !x.struck); if (t && !J.autoQ.some((q) => q.kind === "strike" && q.id === id)) { if (J.mode) queueStrike(id); else instantStrike(id); } }
   }
 
   // ----- интерфейс -----
@@ -168,25 +221,26 @@
     ui.style.display = o ? "flex" : "none";
     document.body.classList.toggle("journal", !!o);
     if (o) { document.exitPointerLock?.(); tasksUpdate(); }
-    else { input.style.display = "none"; J.down = 0; J.stroke = null; }
+    else { input.style.display = "none"; J.down = 0; J.stroke = null; J.mode = 0; const b = document.getElementById("jwrite"); if (b) b.textContent = "Написать"; }
   };
   window.gengineJournalInput = () => {
     const now = performance.now(), dt = Math.min((now - (J.t || now)) / 1000, 0.1); J.t = now;
     const a = J.open ? autoStep(dt) : null;
-    const out = new Float32Array([J.toggle, J.px, J.py, J.down && !a ? 1 : 0, a ? 1 : 0, a ? a[0] : 0, a ? a[1] : 0, a ? a[2] : 0]);
-    J.toggle = 0;
+    const out = new Float32Array([J.toggle, J.px, J.py, J.down && !a ? 1 : 0, a ? 1 : 0, a ? a[0] : 0, a ? a[1] : 0, a ? a[2] : 0, J.flip]);
+    J.toggle = 0; J.flip = 0;
     return out;
   };
   // кончик ручки: пока игрок рисует — линия за ручкой; рука пишет сама — буквы рисует autoStep
   window.gengineInk = (u, v, down) => {
     if (J.auto || !J.open) { J.lastInk = null; return; }
     if (down && u >= 0 && u <= 1 && v >= 0 && v <= 1) {
-      if (!J.stroke) { J.stroke = [u, v]; D.strokes.push(J.stroke); }
+      if (!J.stroke) { J.stroke = [u, v]; D.strokes.push({ s: D.s, pts: J.stroke }); }
       else if (Math.hypot(u - J.stroke.at(-2), v - J.stroke.at(-1)) > 0.0015) {
         inkLine([J.stroke.at(-2), J.stroke.at(-1)], [u, v]); J.stroke.push(u, v); dirty();
       }
     } else if (J.stroke) { if (J.stroke.length < 4) D.strokes.pop(); J.stroke = null; save(); }
   };
+  window.gengineInkAllowed = () => J.mode === 1 && !J.auto;
 
   const css = `
 #jbtn{right:28px;bottom:220px;width:70px;height:70px;border-radius:12px;background:#6b4a2b;opacity:.85;pointer-events:auto;display:flex;align-items:center;justify-content:center;font:700 11px system-ui;color:#f3e6c8;text-shadow:0 1px 2px #000}
@@ -205,16 +259,26 @@ body.journal #cross,body.journal #cast,body.journal #stick,body.journal #hitm{di
     const mk = (id, cls, html) => { const d = document.createElement("div"); d.id = id; d.className = cls; d.innerHTML = html; document.body.appendChild(d); return d; };
     const btn = mk("jbtn", "hud", "ДНЕВНИК");
     hintEl = mk("jhint", "hud", "");
-    ui = mk("jui", "hud", '<button id="jwrite">Написать</button><button id="jclose">Закрыть</button><span>рисуй мышью или пальцем · Enter — запись · J — закрыть</span>');
+    ui = mk("jui", "hud", '<button id="jprev">◀</button><button id="jwrite">Написать</button><button id="jnext">▶</button><button id="jclose">Закрыть</button><span id="jhelp">← → листать · «Написать» — карандаш · J — закрыть</span>');
     input = document.createElement("input"); input.id = "jin"; input.placeholder = "заметка…"; input.maxLength = 60; document.body.appendChild(input);
     const toggle = (e) => { e?.preventDefault?.(); e?.stopPropagation?.(); setOpen(!J.open); };
     btn.addEventListener("click", toggle); btn.addEventListener("touchstart", toggle, { passive: false });
     document.getElementById("jclose").addEventListener("click", toggle);
-    const write = (e) => { e?.stopPropagation?.(); input.style.display = "block"; input.value = ""; input.focus(); };
-    document.getElementById("jwrite").addEventListener("click", write);
+    // «Написать»: правая рука берёт карандаш, блокнот ложится на левую ладонь; ещё раз — заметка с клавиатуры
+    const help = document.getElementById("jhelp"), wbtn = document.getElementById("jwrite");
+    const setMode = (m) => {
+      J.mode = m; wbtn.textContent = m ? "Читать" : "Написать";
+      help.textContent = m ? "рисуй мышью или пальцем · Enter — заметка · J — закрыть" : "← → листать · «Написать» — карандаш · J — закрыть";
+    };
+    const write = (e) => { e?.stopPropagation?.(); if (!J.mode) return setMode(1); input.style.display = "block"; input.value = ""; input.focus(); };
+    wbtn.addEventListener("click", (e) => { e.stopPropagation(); setMode(J.mode ? 0 : 1); });
+    const flip = (d) => (e) => { e?.stopPropagation?.(); if (J.open) J.flip = d; };
+    document.getElementById("jprev").addEventListener("click", flip(-1));
+    document.getElementById("jnext").addEventListener("click", flip(1));
+    addEventListener("wheel", (e) => { if (J.open && Math.abs(e.deltaY) > 20) J.flip = e.deltaY > 0 ? 1 : -1; });
     input.addEventListener("keydown", (e) => {
       e.stopPropagation();
-      if (e.key === "Enter") { const t = input.value.trim(); if (t) queueText(t, "r"); input.style.display = "none"; input.blur(); }
+      if (e.key === "Enter") { const t = input.value.trim(); if (t) { queueText(t, "r"); J.mode = 1; } input.style.display = "none"; input.blur(); }
       if (e.key === "Escape") { input.style.display = "none"; input.blur(); }
     });
     addEventListener("keydown", (e) => {
@@ -222,6 +286,8 @@ body.journal #cross,body.journal #cast,body.journal #stick,body.journal #hitm{di
       if (e.code === "KeyJ" && !e.repeat) toggle();
       if (J.open && e.code === "Escape") toggle();
       if (J.open && e.code === "Enter") write();
+      if (J.open && (e.code === "ArrowRight" || e.code === "KeyD")) J.flip = 1;
+      if (J.open && (e.code === "ArrowLeft" || e.code === "KeyA")) J.flip = -1;
     });
     // курсор и касание → NDC; пока дневник открыт, ими рисуют (обзор и стрельба стоят)
     const canvas = document.getElementById("bevy");
