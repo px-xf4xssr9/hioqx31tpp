@@ -153,6 +153,8 @@ function setup() {
   window.gengineFx = (kind, v) => {
     switch (kind) {
       case "shot": vibrate(15); break;
+      case "cast": vibrate(20); break;
+      case "boom": vibrate(60); break;
       case "hit":
         hitm.style.color = "#fff"; hitm.style.transition = "none"; hitm.style.opacity = 1;
         clearTimeout(hitT); hitT = setTimeout(() => { hitm.style.transition = ""; hitm.style.opacity = 0; }, 120);
