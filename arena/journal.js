@@ -12,7 +12,7 @@
 //   window.gengineJournalMode() → 0 читать (две руки держат), 1 писать (карандаш)
 // Записи: assets/journal/entries.json (сюжет и задания) + свои заметки и рисунки игрока — в localStorage.
 (() => {
-  const W = 2048, H = 1654;           // разворот 26 × 21 см (чтение, journal3_spec.json — по кадрам Uncharted 4)
+  const W = 2048, H = 1453;           // разворот A5: 29.6 × 21 см (чтение, journal4_spec.json — по кадрам Uncharted 4)
   const PAGE = W / 2, MX = 96, TOP = 150, LINE = 64;
   const INK = "#1c2747", FONT = "600 50px Caveat, cursive";
   const KEY = "gengine.journal.v2", SPREADS = 12;
@@ -40,29 +40,55 @@
   const tmp = document.createElement("canvas"); tmp.width = W; tmp.height = H;
   const dirty = () => (window.gengineJournalDirty = true);
 
-  // бумага: тёплый тон, волокна, линовка, тень у корешка, края темнее
+  // бумага старого полевого блокнота (как у Нейтана в U4): без линовки, кремовая, неровный тон пятнами,
+  // края каждой страницы потемнели от рук и времени, редкие рыжие точки (фоксинг), волокна, тень у корешка
   function drawPaper() {
     const p = paper.getContext("2d");
-    p.fillStyle = "#e9dfc6"; p.fillRect(0, 0, W, H);
-    const im = p.getImageData(0, 0, W, H), d = im.data;
     let s = 1234567;
     const rnd = () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    p.fillStyle = "#efe3c6"; p.fillRect(0, 0, W, H);
+    // крупные пятна тона: то светлее, то желтее
+    for (let i = 0; i < 70; i++) {
+      const x = rnd() * W, y = rnd() * H, r = 120 + rnd() * 380, warm = rnd() < 0.6;
+      const gr = p.createRadialGradient(x, y, 0, x, y, r);
+      gr.addColorStop(0, warm ? `rgba(170,125,60,${0.03 + rnd() * 0.05})` : `rgba(250,244,225,${0.06 + rnd() * 0.08})`);
+      gr.addColorStop(1, "rgba(0,0,0,0)");
+      p.fillStyle = gr; p.fillRect(x - r, y - r, 2 * r, 2 * r);
+    }
+    // края страниц темнее (каждая страница отдельно), сильнее у внешнего края и низа — там берут руками
+    for (const [x0, outer] of [[0, 0], [PAGE, PAGE]]) {
+      const edge = (x, y, w, h, gx0, gy0, gx1, gy1, a) => {
+        const gr = p.createLinearGradient(gx0, gy0, gx1, gy1);
+        gr.addColorStop(0, `rgba(105,70,30,${a})`); gr.addColorStop(1, "rgba(105,70,30,0)");
+        p.fillStyle = gr; p.fillRect(x, y, w, h);
+      };
+      const ox = outer === 0 ? x0 : x0 + PAGE;  // внешний край: у левой — слева, у правой — справа
+      if (outer === 0) edge(x0, 0, 110, H, x0, 0, x0 + 110, 0, 0.3); else edge(ox - 110, 0, 110, H, ox, 0, ox - 110, 0, 0.3);
+      edge(x0, 0, PAGE, 70, 0, 0, 0, 70, 0.2);
+      edge(x0, H - 90, PAGE, 90, 0, H, 0, H - 90, 0.32);
+    }
+    // фоксинг — рыжие точки
+    for (let i = 0; i < 60; i++) {
+      const x = rnd() * W, y = rnd() * H, r = 2 + rnd() * rnd() * 10;
+      p.fillStyle = `rgba(160,105,55,${0.05 + rnd() * 0.12})`;
+      p.beginPath(); p.arc(x, y, r, 0, Math.PI * 2); p.fill();
+    }
+    // волокна и зерно
+    const im = p.getImageData(0, 0, W, H), d = im.data;
     for (let i = 0; i < d.length; i += 4) {
-      const n = (rnd() - 0.5) * 14;
+      const n = (rnd() - 0.5) * 12;
       d[i] += n; d[i + 1] += n; d[i + 2] += n * 0.8;
     }
     p.putImageData(im, 0, 0);
-    p.strokeStyle = "rgba(70,90,130,.22)"; p.lineWidth = 2;
-    for (const x0 of [0, PAGE]) {
-      for (let y = TOP; y < H - 60; y += LINE) { p.beginPath(); p.moveTo(x0 + 50, y); p.lineTo(x0 + PAGE - 50, y); p.stroke(); }
+    p.strokeStyle = "rgba(120,90,50,.07)"; p.lineWidth = 1;
+    for (let i = 0; i < 900; i++) {
+      const x = rnd() * W, y = rnd() * H, a = rnd() * Math.PI, l = 6 + rnd() * 22;
+      p.beginPath(); p.moveTo(x, y); p.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); p.stroke();
     }
-    // у корешка — узкая тень сгиба (сам прогиб даёт сетка страницы в движке)
-    const gut = p.createLinearGradient(PAGE - 40, 0, PAGE + 40, 0);
-    gut.addColorStop(0, "rgba(0,0,0,0)"); gut.addColorStop(0.5, "rgba(60,40,10,.28)"); gut.addColorStop(1, "rgba(0,0,0,0)");
-    p.fillStyle = gut; p.fillRect(PAGE - 40, 0, 80, H);
-    const vg = p.createRadialGradient(W / 2, H / 2, H * 0.45, W / 2, H / 2, W * 0.7);
-    vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(80,50,20,.35)");
-    p.fillStyle = vg; p.fillRect(0, 0, W, H);
+    // у корешка — тень сгиба (сам прогиб даёт сетка страницы в движке)
+    const gut = p.createLinearGradient(PAGE - 70, 0, PAGE + 70, 0);
+    gut.addColorStop(0, "rgba(0,0,0,0)"); gut.addColorStop(0.5, "rgba(60,40,10,.38)"); gut.addColorStop(1, "rgba(0,0,0,0)");
+    p.fillStyle = gut; p.fillRect(PAGE - 70, 0, 140, H);
   }
 
   let gg = g;  // куда рисуем: разворот на экране или вспомогательный холст при перевороте
