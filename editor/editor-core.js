@@ -225,6 +225,8 @@ export function quickCheck(clip, traj) {
       if (k.elbow < lo) issues[f].push({ sev: "red", key: i, msg: `${JOINT_RU.flex} ${deg(k.elbow)} < ${deg(lo)}`, fix: { op: "elbow", key: i, v: near(lo) } });
     }
     const { terms, screen } = keyTerms(q, k);
+    const elbowBad = k.elbow != null && (k.elbow > lim("flex")[1] || k.elbow < lim("flex")[0]);
+    if (elbowBad) return; // промах кисти и глубины тут — следствие сгиба за пределом: показываем одну причину
     if (terms.ndc > 0.06) issues[f].push({ sev: "red", key: i, msg: `кисть не достаёт до ключа: промах ${terms.ndc.toFixed(2)} экрана (суставы в пределе)`, fix: { op: "ndc", key: i, v: [r3(clip.side === "r" ? -screen[0] : screen[0]), r3(screen[1])] } });
     if (terms.depth > 0.03) issues[f].push({ sev: "red", key: i, msg: `глубина кисти ${screen[2].toFixed(2)} м вне [${k.depth.map((v) => Number(v).toFixed(2)).join("; ")}]`, fix: { op: "depth", key: i, v: [r3(Math.max(NEAR + 0.03, screen[2] - 0.05)), r3(screen[2] + 0.05)] } });
     if (terms.forearm > 25) issues[f].push({ sev: "warn", key: i, msg: `направление предплечья мимо на ${deg(terms.forearm)}` });

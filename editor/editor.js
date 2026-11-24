@@ -70,7 +70,7 @@ let view = { x: 0, y: 0, w: 1, h: 1 };
 function layout() {
   const r = cv.parentElement.getBoundingClientRect(), dpr = devicePixelRatio || 1;
   cv.width = r.width * dpr; cv.height = r.height * dpr; g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  const pad = 24, W = r.width - pad * 2, H = r.height - pad * 2;
+  const pad = r.width < 600 ? 6 : 24, W = r.width - pad * 2, H = r.height - pad * 2;
   const w = Math.min(W, H * C.CAM.asp); const h = w / C.CAM.asp;
   view = { x: (r.width - w) / 2, y: (r.height - h) / 2, w, h };
   const t = tl.parentElement.getBoundingClientRect(); tl.width = t.width * dpr; tl.height = t.height * dpr; tg.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -82,21 +82,21 @@ const p2n = (x, y) => [sideX(((x - view.x) / view.w) * 2 - 1), 1 - ((y - view.y)
 const p2nRaw = (x, y) => [((x - view.x) / view.w) * 2 - 1, 1 - ((y - view.y) / view.h) * 2]; // в осях клипа (с учётом стороны)
 const keyN2p = (n) => [view.x + ((n[0] + 1) / 2) * view.w, view.y + ((1 - n[1]) / 2) * view.h];
 
-function seg(a, b, r, col) { // отрезок руки в 3D: обрезка ближней плоскостью, толщина по глубине
+function seg(a, b, r, col, thin) { // отрезок руки в 3D: обрезка ближней плоскостью, толщина по глубине
   let A = C.toCam(a), B = C.toCam(b); const zn = 0.04;
   if (A[2] < zn && B[2] < zn) return;
   if (A[2] < zn) A = A.map((v, i) => v + (B[i] - v) * ((zn - A[2]) / (B[2] - A[2])));
   if (B[2] < zn) B = B.map((v, i) => v + (A[i] - v) * ((zn - B[2]) / (A[2] - B[2])));
   const pa = n2p(C.camToNdc(A)), pb = n2p(C.camToNdc(B));
-  const px = (z) => Math.min(70, (r / (z * C.TAN_HALF)) * (view.h / 2));
+  const px = (z) => Math.min(view.h * 0.06, (r / (z * C.TAN_HALF)) * (view.h / 2));
   g.strokeStyle = col; g.lineCap = "round";
-  g.lineWidth = (px(A[2]) + px(B[2])); g.beginPath(); g.moveTo(...pa); g.lineTo(...pb); g.stroke();
+  g.lineWidth = thin ? 3 : (px(A[2]) + px(B[2])) * 0.7; g.beginPath(); g.moveTo(...pa); g.lineTo(...pb); g.stroke();
 }
-function drawArm(p, alpha, tint) {
-  g.globalAlpha = alpha;
-  g.globalAlpha = alpha * 0.6; seg(p.S, p.E, 0.045, tint || "#566070"); g.globalAlpha = alpha * 0.9;
-  seg(p.E, p.W, 0.033, tint || "#6b7688");
-  seg(p.W, p.tip, 0.04, tint || "#d9a98c");
+function drawArm(p, alpha, tint) { // tint — «луковица»: тонкий силуэт, чтобы не закрывать кадр
+  const thin = !!tint;
+  g.globalAlpha = alpha * 0.45; seg(p.S, p.E, 0.045, tint || "#566070", thin);
+  g.globalAlpha = alpha * 0.8; seg(p.E, p.W, 0.033, tint || "#6b7688", thin);
+  g.globalAlpha = alpha * 0.85; seg(p.W, p.tip, 0.04, tint || "#d9a98c", thin);
   g.globalAlpha = 1;
 }
 function drawTarget(t) {
@@ -121,7 +121,7 @@ function draw() {
   g.beginPath(); g.moveTo(view.x + view.w / 2 - 8, view.y + view.h / 2); g.lineTo(view.x + view.w / 2 + 8, view.y + view.h / 2);
   g.moveTo(view.x + view.w / 2, view.y + view.h / 2 - 8); g.lineTo(view.x + view.w / 2, view.y + view.h / 2 + 8); g.stroke();
   const tr = ED.traj, fi = frameAt(ED.time);
-  if (ED.onion) for (const d of [-6, -3, 3, 6]) { const f = fi + d; if (f >= 0 && f < tr.n) drawArm(tr.frames[f].p, 0.16, d < 0 ? "#7aa7ff" : "#ff9d7a"); }
+  if (ED.onion) for (const d of [-6, -3, 3, 6]) { const f = fi + d; if (f >= 0 && f < tr.n) drawArm(tr.frames[f].p, 0.35, d < 0 ? "#7aa7ff" : "#ff9d7a"); }
   const cur = tr.at(ED.time); const p = C.fk(cur.q);
   drawArm(p, 1);
   g.globalAlpha = 0.85; for (const t of ED.clip.targets || []) drawTarget(t); g.globalAlpha = 1; // поверх руки — чтобы было за что тянуть
@@ -145,8 +145,8 @@ function draw() {
     g.fillStyle = "#f2c14e"; g.beginPath(); g.rect(pe[0] - 6, pe[1] - 6, 12, 12); g.fill();
   }
   const fr = tr.frames[fi], bad = ED.issues[fi].filter((x) => x.sev === "red").length + fullAt(fi).length;
-  $("status").textContent = `${ED.time.toFixed(2)} с · кадр ${fi}/${tr.n - 1} · рука в кадре ${Math.round(fr.inFrame * 100)}% · ` +
-    `${C.JOINTS.map((j, i) => `${C.JOINT_RU[j]} ${Math.round(cur.q[i])}°`).join(", ")}${bad ? " · КРАСНЫЙ КАДР" : ""} ${$("status").dataset.saved || ""}`;
+  $("status").textContent = `${ED.time.toFixed(2)} с · кадр ${fi}/${tr.n - 1}${bad ? " · КРАСНЫЙ КАДР" : ""} · рука в кадре ${Math.round(fr.inFrame * 100)}% · ` +
+    `локоть ${Math.round(cur.q[3])}°, плечо: подъём ${Math.round(cur.q[0])}°, плоскость ${Math.round(cur.q[1])}°, ротация ${Math.round(cur.q[2])}°`;
   $("hint").style.display = ED.clip.keys.length ? "none" : "block";
   $("hint").innerHTML = "<b>С чего начать</b><br>1. Двойной щелчок по кадру — ключ: кисть в этом месте в этот момент.<br>" +
     "2. Сдвиньте ползунок времени внизу и поставьте ещё 2–4 ключа (взмах: слева → вверху справа → обратно).<br>" +
@@ -181,54 +181,104 @@ function drawTimeline() {
 }
 
 // ---------- панель ----------
-function num(label, val, on, step = 0.01, tip = "") {
-  const r = document.createElement("div"); r.className = "row";
-  r.innerHTML = `<label title="${tip}">${label}</label>`;
-  const i = document.createElement("input"); i.type = "number"; i.step = step; i.value = val ?? ""; i.title = tip;
-  i.onchange = () => on(i.value === "" ? null : Number(i.value)); r.appendChild(i); return r;
+function el(tag, attrs = {}, kids = []) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) { if (k.startsWith("on")) e[k] = v; else if (k === "text") e.textContent = v; else e.setAttribute(k, v); }
+  for (const c of kids) e.append(c);
+  return e;
 }
+function numIn(val, on, step, tip = "", min) {
+  const i = el("input", { type: "number", step, title: tip }); if (min != null) i.min = min;
+  i.value = val == null ? "" : String(Math.round(Number(val) * 1000) / 1000);
+  i.onchange = () => on(i.value === "" ? null : Number(i.value)); return i;
+}
+const row = (label, tip, ...inputs) => el("div", { class: "row" }, [el("label", { title: tip, text: label }), inputs.length > 1 ? el("div", { class: "pair" }, inputs) : inputs[0]]);
+// Условия ключа, кроме места кисти и глубины: показываются только заданные, добавляются из списка.
+const CONDS = {
+  elbow: { ru: "сгиб локтя, °", tip: () => `0 — прямая рука; допустимо ${C.lim("flex").join("…")}°`, def: () => 90 },
+  forearm_dir: { ru: "направление предплечья", tip: () => "Куда смотрит предплечье на экране (локоть → запястье). Тяните жёлтый квадрат в кадре", def: () => [0.6, 0.8] },
+  below: { ru: "уход вниз: не выше y", tip: () => "Кисть не выше этой линии экрана (−1 — нижний край): рука уходит за кадр", def: () => -0.8 },
+  elbow_off: { ru: "локоть за кадром", tip: () => "Рука входит из-за края экрана, как в BioShock", def: () => true },
+  w: { ru: "вес ключа", tip: () => "Насколько строго держать ключ (1 — обычно, 2 — вдвое строже)", def: () => 2 },
+};
 function panel() {
   const kp = $("keyp"); kp.innerHTML = "";
-  if (ED.sel == null) kp.innerHTML = '<div style="color:var(--dim)">Щелчок по ключу (кольцо или ромб) — выбрать. Двойной щелчок по кадру — новый ключ. K — ключ в текущем моменте, Delete — удалить.</div>';
+  const n = ED.clip.keys.length;
+  $("keytitle").textContent = ED.sel == null ? `Ключи (${n})` : `Ключ ${ED.sel + 1} из ${n}`;
+  $("kprev").disabled = !n; $("knext").disabled = !n; $("kdel").disabled = ED.sel == null;
+  if (ED.sel == null) kp.append(el("div", { class: "note", text: n ? "Выберите ключ: кольцо в кадре или ромб на шкале (‹ › — по очереди). Двойной щелчок по кадру — новый ключ, K — ключ в текущем моменте." : "Ключей нет. Двойной щелчок по кадру — первый ключ." }));
   else {
     const k = ED.clip.keys[ED.sel], set = (f, v, lbl) => edit(() => { if (v == null) delete k[f]; else k[f] = v; }, lbl);
-    kp.appendChild(num("время, с", Number(k.t), (v) => edit(() => { k.t = C.r3(Math.max(0, Math.min(ED.clip.T, v))); }), 0.01));
-    if (k.ndc) { kp.appendChild(num("кисть x (экран)", Number(k.ndc[0]), (v) => set("ndc", [v, k.ndc[1]]), 0.01, "−1 — левый край, +1 — правый")); kp.appendChild(num("кисть y (экран)", Number(k.ndc[1]), (v) => set("ndc", [k.ndc[0], v]), 0.01, "−1 — низ, +1 — верх")); }
-    const d = k.depth || [null, null];
-    kp.appendChild(num("глубина от, м", d[0], (v) => set("depth", v == null ? null : [v, d[1] ?? v + 0.1]), 0.01, "Расстояние кисти от камеры: размер кисти в кадре"));
-    kp.appendChild(num("глубина до, м", d[1], (v) => set("depth", v == null ? null : [d[0] ?? v - 0.1, v]), 0.01));
-    const [lo, hi] = C.lim("flex");
-    kp.appendChild(num("сгиб локтя, °", k.elbow, (v) => set("elbow", v), 1, `0 — прямая рука; допустимо ${lo}…${hi}°`));
-    kp.appendChild(num("ниже края y", k.below, (v) => set("below", v), 0.05, "Кисть не выше этой линии экрана (уход за кадр)"));
-    kp.appendChild(num("вес ключа", k.w, (v) => set("w", v), 0.5, "Насколько строго держать ключ (1 — обычно)"));
-    const r = document.createElement("div"); r.className = "row";
-    r.innerHTML = `<label title="Локоть за кадром, рука входит из-за края экрана">локоть за кадром</label>`;
-    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!k.elbow_off; cb.onchange = () => set("elbow_off", cb.checked ? true : null); r.appendChild(cb); kp.appendChild(r);
-    if (k.forearm_dir) { const b = document.createElement("button"); b.textContent = "снять направление предплечья"; b.onclick = () => set("forearm_dir", null); kp.appendChild(b); }
-    if (k.attach) { const b = document.createElement("button"); b.textContent = "отлепить от " + k.attach; b.onclick = () => set("attach", null); kp.appendChild(b); }
+    kp.append(row("время, с", "Момент ключа", numIn(k.t, (v) => edit(() => { k.t = C.r3(Math.max(0, Math.min(ED.clip.T, v ?? 0))); ED.clip.keys.sort((a, b) => a.t - b.t); ED.sel = ED.clip.keys.indexOf(k); }, "время ключа"), 0.01, "", 0)));
+    if (k.attach) {
+      const t = (ED.clip.targets || []).find((x) => x.id === String(k.attach).split("@")[0]);
+      kp.append(row("кисть", "Ключ прилеплен к предмету: кисть идёт за ним", el("div", { class: "pair" }, [el("span", { text: (t ? t.label || t.id : k.attach) + (String(k.attach).endsWith("@end") ? " (конец хода)" : "") }), el("button", { class: "x", text: "отлепить", title: "Ключ больше не следует за предметом", onclick: () => edit(() => { const e = C.effKey(ED.clip, k); k.ndc = e.ndc.map(C.r3); delete k.attach; }, "отлеплен") })])));
+    } else if (k.ndc) {
+      kp.append(row("кисть ←→ / ↑↓", "Место кисти на экране: −1…+1 от края до края (тяните кольцо в кадре)",
+        numIn(k.ndc[0], (v) => set("ndc", [v ?? 0, k.ndc[1]]), 0.01, "←→: −1 левый край, +1 правый"), numIn(k.ndc[1], (v) => set("ndc", [k.ndc[0], v ?? 0]), 0.01, "↑↓: −1 низ, +1 верх")));
+    } else kp.append(row("кисть", "", el("button", { text: "задать место", title: "Ключ сейчас без места на экране — поставить туда, где кисть сейчас", onclick: () => { const p = C.toScreen(C.fk(ED.traj.keyQ[ED.sel]).ball); set("ndc", [C.r3(sideX(p[0])), C.r3(p[1])], "место задано"); } })));
+    const d = k.depth;
+    if (d) kp.append(row("глубина, м", "Расстояние кисти от камеры (от–до): чем меньше, тем крупнее кисть. Колесо над кольцом — ближе/дальше",
+      numIn(d[0], (v) => set("depth", v == null ? null : [v, Math.max(v, d[1])]), 0.01, "от", C.NEAR), numIn(d[1], (v) => set("depth", v == null ? null : [Math.min(d[0], v), v]), 0.01, "до", C.NEAR)));
+    for (const [f, c] of Object.entries(CONDS)) {
+      if (k[f] == null) continue;
+      let input;
+      if (f === "elbow_off") input = el("span", { class: "note", text: "да" });
+      else if (f === "forearm_dir") input = el("span", { class: "note", text: `${Math.round(Math.atan2(k[f][1], k[f][0]) * 57.3)}° к горизонту` });
+      else input = numIn(k[f], (v) => set(f, v), f === "elbow" ? 1 : f === "w" ? 0.5 : 0.05, c.tip());
+      kp.append(el("div", { class: "cond" }, [el("label", { title: c.tip(), text: c.ru }), input, el("button", { class: "x", text: "✕", title: "Убрать условие", onclick: () => set(f, null, "условие убрано") })]));
+    }
+    const add = el("select", { title: "Добавить условие к ключу" }, [el("option", { value: "", text: "+ условие…" })]);
+    if (!k.depth) add.append(el("option", { value: "depth", text: "глубина" }));
+    for (const [f, c] of Object.entries(CONDS)) if (k[f] == null) add.append(el("option", { value: f, text: c.ru }));
+    add.onchange = () => { const f = add.value; if (!f) return; if (f === "depth") { const z = C.toScreen(C.fk(ED.traj.keyQ[ED.sel]).ball)[2]; set("depth", [C.r3(z - 0.05), C.r3(z + 0.05)], "глубина"); } else set(f, CONDS[f].def(), CONDS[f].ru); };
+    if (add.options.length > 1) kp.append(el("div", { class: "row" }, [el("span"), add]));
   }
   $("T").value = Number(ED.clip.T); $("rel").value = ED.clip.release_t != null ? Number(ED.clip.release_t) : "";
   $("side_").textContent = ED.clip.side === "r" ? "правая" : "левая";
-  const all = ED.issues.flatMap((xs, f) => xs.map((x) => ({ ...x, f })));
-  const reds = all.filter((x) => x.sev === "red");
-  $("sum").innerHTML = (reds.length + ED.full.length ? `<span style="color:var(--red)">красных: ${reds.length + ED.full.length}</span>` : '<span style="color:var(--ok)">быстрые проверки зелёные</span>') +
-    ` · суставы, скорости (KIT), кадр${ED.fullInfo ? "<br>" + ED.fullInfo : ""}`;
+  issuesPanel();
+}
+function groupIssues() { // одинаковые нарушения в соседних кадрах — одной строкой «кадры 9–12», худшее значение
+  const all = [];
+  ED.issues.forEach((xs, f) => xs.forEach((x) => all.push({ ...x, f })));
+  ED.full.forEach((r) => all.push({ sev: "red", f: r.f, msg: "полная: " + r.msg }));
+  const groups = [];
+  for (const x of all.sort((a, b) => (a.sev === b.sev ? a.f - b.f : a.sev === "red" ? -1 : 1))) {
+    const kind = x.msg.replace(/-?[\d.]+/g, "#"), g0 = groups.find((g) => g.kind === kind && g.key === x.key && x.f - g.f1 <= 1);
+    if (g0) { g0.f1 = x.f; g0.items.push(x); } else groups.push({ kind, key: x.key, sev: x.sev, f0: x.f, f1: x.f, items: [x] });
+  }
+  for (const g of groups) { // худшее — по первому числу в сообщении
+    const v = (m) => Math.abs(Number((m.match(/-?[\d.]+/) || [0])[0]));
+    g.worst = g.items.reduce((a, b) => (v(b.msg) > v(a.msg) ? b : a));
+  }
+  return groups;
+}
+function issuesPanel() {
+  const groups = groupIssues(), reds = groups.filter((g) => g.sev === "red").length, warns = groups.length - reds;
+  $("sum").innerHTML = reds ? `<span class="bad">Красных: ${reds}</span>${warns ? ` · предупреждений ${warns}` : ""}`
+    : `<span class="good">Всё зелёное</span>${warns ? ` · предупреждений ${warns}` : ""} <span class="note">— суставы, скорости живых людей (KIT), кадр</span>`;
+  $("fix").disabled = !groups.some((g) => g.sev === "red" && g.items.some((x) => x.fix));
+  $("fullinfo").textContent = ED.fullInfo || (ED.server ? "" : "Полная проверка (кожа, форма кисти) — при запуске через tools/anim/editor_server.py");
   const box = $("issues"); box.innerHTML = "";
-  for (const x of [...all, ...ED.full.map((r) => ({ sev: "red", f: r.f, msg: "полная: " + r.msg }))].slice(0, 60)) {
-    const d = document.createElement("div"); d.className = x.sev; d.textContent = `кадр ${x.f}: ${x.msg}`;
-    d.onclick = () => { ED.time = ED.traj.frames[x.f].t; if (x.key != null) ED.sel = x.key; panel(); draw(); };
-    box.appendChild(d);
+  for (const g of groups.slice(0, 40)) {
+    const where = g.f0 === g.f1 ? `кадр ${g.f0}` : `кадры ${g.f0}–${g.f1}`, who = g.key != null ? ` · ключ ${g.key + 1}` : "";
+    const fix = g.items.find((x) => x.fix);
+    const btn = fix ? el("button", { text: "Поправить", title: "Ближайшая допустимая правка", onclick: (e) => { e.stopPropagation(); fixOne(fix); } }) : el("span");
+    box.append(el("div", { class: "it " + g.sev, title: "Показать кадр", onclick: () => { ED.time = ED.traj.frames[g.worst.f].t; if (g.key != null) ED.sel = g.key; panel(); draw(); } },
+      [el("div", {}, [el("div", { class: "w", text: where + who }), el("div", { text: g.worst.msg })]), btn]));
   }
 }
+function fixOne(x) { edit(() => C.applyFix(ED.clip, ED.traj, x.fix), "поправлено: " + x.msg); }
 
 // ---------- мышь: кадр ----------
 let drag = null;
+const HIT = matchMedia("(pointer: coarse)").matches ? 26 : 14; // палец толще курсора
 const mpos = (e, el) => { const r = el.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
 function hitKey(x, y) {
   let best = null;
   ED.clip.keys.forEach((k, i) => {
     const e = C.effKey(ED.clip, k); const pts = [n2p(C.toScreen(C.fk(ED.traj.keyQ[i]).ball))]; if (e.ndc) pts.push(keyN2p(e.ndc));
-    for (const p of pts) { const d = Math.hypot(p[0] - x, p[1] - y); if (d < 14 && (!best || d < best.d)) best = { i, d }; }
+    for (const p of pts) { const d = Math.hypot(p[0] - x, p[1] - y); if (d < HIT && (!best || d < best.d)) best = { i, d }; }
   });
   return best && best.i;
 }
@@ -240,8 +290,14 @@ function nearTarget(n) { // прилипание: кисть рядом с пр�
   }
   return null;
 }
-cv.addEventListener("mousedown", (e) => {
+let lastTap = { t: 0, x: 0, y: 0 };
+cv.addEventListener("pointerdown", (e) => {
   const [x, y] = mpos(e, cv);
+  if (e.pointerType !== "mouse") { // двойное касание на телефоне = двойной щелчок
+    const now = performance.now();
+    if (now - lastTap.t < 350 && Math.hypot(x - lastTap.x, y - lastTap.y) < 30 && hitKey(x, y) == null) { lastTap.t = 0; addKey(p2nRaw(x, y).map(C.r3)); return; }
+    lastTap = { t: now, x, y };
+  }
   if (ED.sel != null) { const pe = elbowHandle(C.fk(ED.traj.keyQ[ED.sel])); if (Math.hypot(pe[0] - x, pe[1] - y) < 10) { drag = { kind: "elbow", before: snapshot() }; return; } }
   const i = hitKey(x, y);
   if (i != null) { ED.sel = i; ED.time = Number(ED.clip.keys[i].t); drag = { kind: "key", before: snapshot() }; panel(); draw(); return; }
@@ -249,7 +305,7 @@ cv.addEventListener("mousedown", (e) => {
   if (t) { drag = { kind: "target", t, before: snapshot() }; return; }
   ED.sel = null; panel(); draw();
 });
-window.addEventListener("mousemove", (e) => {
+window.addEventListener("pointermove", (e) => {
   if (!drag) return tipView(e);
   const [x, y] = mpos(e, cv), n = p2nRaw(x, y).map(C.r3);
   if (drag.kind === "key") { const k = ED.clip.keys[ED.sel]; delete k.attach; k.ndc = n; const a = nearTarget(n); if (a) k.attach = a; }
@@ -260,7 +316,7 @@ window.addEventListener("mousemove", (e) => {
   }
   recompute();
 });
-window.addEventListener("mouseup", () => {
+window.addEventListener("pointerup", () => {
   if (!drag) return;
   if (drag.before !== snapshot()) { ED.undo.push(drag.before); ED.redo = []; changed(drag.kind === "target" ? "предмет сдвинут" : "ключ сдвинут"); }
   drag = null;
@@ -298,14 +354,14 @@ const hideTip = () => { $("tip").style.display = "none"; };
 
 // ---------- мышь: шкала ----------
 let tdrag = null;
-tl.addEventListener("mousedown", (e) => {
+tl.addEventListener("pointerdown", (e) => {
   const [x, y] = mpos(e, tl);
   const i = ED.clip.keys.findIndex((k) => Math.abs(t2x(k.t) - x) < 9 && y > 50 && y < 78);
   if (i >= 0) { ED.sel = i; tdrag = { key: ED.clip.keys[i], before: snapshot() }; }
   else { tdrag = { scrub: true }; ED.time = x2t(x); }
   panel(); draw();
 });
-window.addEventListener("mousemove", (e) => {
+window.addEventListener("pointermove", (e) => {
   if (e.target === tl && !tdrag) {
     const [x] = mpos(e, tl), f = frameAt(x2t(x)), xs = [...ED.issues[f], ...fullAt(f)];
     xs.length ? showTip(e, `кадр ${f}: ` + xs.map((v) => v.msg).join("<br>")) : hideTip();
@@ -315,7 +371,7 @@ window.addEventListener("mousemove", (e) => {
   if (tdrag.scrub) { ED.time = x2t(x); draw(); return; }
   tdrag.key.t = C.r3(Math.round(x2t(x) * C.FPS) / C.FPS); ED.time = Number(tdrag.key.t); recompute();
 });
-window.addEventListener("mouseup", () => {
+window.addEventListener("pointerup", () => {
   if (tdrag && tdrag.key) {
     ED.clip.keys.sort((a, b) => a.t - b.t); ED.sel = ED.clip.keys.indexOf(tdrag.key);
     if (tdrag.before !== snapshot()) { ED.undo.push(tdrag.before); ED.redo = []; changed("ключ сдвинут по времени"); }
@@ -377,6 +433,10 @@ function fixAll() {
   say(n ? `поправлено: ${n}` : "нечего поправлять автоматически");
 }
 $("fix").onclick = fixAll;
+const selKey = (d) => { const n = ED.clip.keys.length; if (!n) return; ED.sel = ED.sel == null ? (d > 0 ? 0 : n - 1) : (ED.sel + d + n) % n; ED.time = Number(ED.clip.keys[ED.sel].t); panel(); draw(); };
+$("kprev").onclick = () => selKey(-1); $("knext").onclick = () => selKey(1);
+$("kdel").onclick = () => { if (ED.sel == null) return; const i = ED.sel; ED.sel = null; edit(() => ED.clip.keys.splice(i, 1), "ключ удалён"); };
+$("cmdgo").onclick = () => command();
 async function fullCheck() {
   if (!ED.server) { say("полная проверка — в редакторе через tools/anim/editor_server.py (или в сессии ИИ: tools/anim/pipeline.sh check)"); return; }
   await save(); say("полная проверка идёт…"); $("full").disabled = true;
