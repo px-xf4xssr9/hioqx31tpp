@@ -1,13 +1,105 @@
-// Редактор анимаций рук (этап 1): интерфейс поверх web/editor-core.js.
-// Запуск локально (сохранение в tools/anim/motion, полная проверка, команды ИИ): python3 tools/anim/editor_server.py
-// В опубликованной сборке — те же клипы только для просмотра/правки, сохранение — скачать файл и автосохранение в браузере.
+// Редактор анимаций рук (этап 1) — HTML-панель поверх игры: arena/?editor=1.
+// Рука и гизмо (ключи, путь кисти, предметы) рисует движок (crates/lite/src/editor); здесь — панель, шкала,
+// ввод и подсказки. Логика клипа и быстрые проверки — web/editor-core.js (общая с тестами в node).
+// Локально (сохранение в tools/anim/motion, полная проверка, команды ИИ): python3 tools/anim/editor_server.py.
+// В опубликованной сборке — клипы из editor/clips, автосохранение в браузере, «Сохранить» скачивает файл.
 import * as C from "./editor-core.js";
 
+const CSS = `
+:root{--bg:#16181c;--pan:#1f2228;--pan2:#262a31;--line:#30343c;--tx:#e6e6e6;--dim:#8a909c;--acc:#5aa9ff;--red:#ff5a5a;--yel:#f2c14e;--ok:#4ecb71}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--tx);font:13px system-ui,sans-serif}
+#app{display:grid;grid-template-columns:1fr 320px;grid-template-rows:auto 1fr 104px;height:100vh}
+#bar{grid-column:1/3;display:flex;flex-wrap:wrap;gap:4px;padding:6px;background:var(--pan);border-bottom:1px solid var(--line);align-items:center}
+button,select,input{background:#2a2e36;color:var(--tx);border:1px solid var(--line);border-radius:4px;padding:4px 8px;font:inherit;min-height:28px}
+button{cursor:pointer}button:hover{border-color:var(--acc)}button.on{background:#284a70}button:disabled{opacity:.5}
+button.pri{background:#284a70;border-color:#3d6da3}
+.sep{width:1px;height:20px;background:var(--line);margin:0 4px}
+#view{position:relative;overflow:hidden;min-height:0}#view>canvas{position:absolute;inset:0;width:100%!important;height:100%!important;display:block}#cv{cursor:crosshair;touch-action:none;z-index:2}
+#panel,#gfx,#cast,#stats,#cross,#hitm,#vig,#dead,#jbtn,#jin,#splash{display:none!important}\n#app{position:relative;z-index:1}
+#side{grid-row:2/4;grid-column:2;background:var(--pan);border-left:1px solid var(--line);overflow:auto;min-height:0}
+#side section{padding:10px 12px;border-bottom:1px solid var(--line)}
+#side h3{margin:0 0 8px;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.04em;display:flex;align-items:center;gap:6px}
+#side h3 .grow{flex:1}#side h3 button{text-transform:none;letter-spacing:0;font-size:12px;padding:2px 8px;min-height:24px}
+#tl{grid-column:1;background:#1a1c21;border-top:1px solid var(--line);position:relative;min-height:0}#tlc{width:100%;height:100%;display:block;touch-action:none}
+.row{display:grid;grid-template-columns:118px 1fr;gap:6px;align-items:center;margin:5px 0}.row>label{color:var(--dim)}
+.row .pair{display:flex;gap:4px;align-items:center}.row input[type=number]{width:100%;min-width:0}.row .pair input{width:50%}
+.row .x{padding:2px 7px;min-height:24px;color:var(--dim)}
+.cond{display:grid;grid-template-columns:118px 1fr auto;gap:6px;align-items:center;margin:5px 0}.cond>label{color:var(--dim)}.cond input{width:100%;min-width:0}
+.note{color:var(--dim);line-height:1.45}
+#sum{font-size:13px;margin-bottom:6px}#sum .bad{color:var(--red);font-weight:600}#sum .good{color:var(--ok);font-weight:600}
+#issues .it{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center;padding:6px 8px;border-radius:4px;margin:4px 0;cursor:pointer;line-height:1.35}
+#issues .red{background:#4a1f22}#issues .warn{background:#3d341c}#issues .it .w{color:var(--dim);font-size:12px}
+#issues .it button{padding:2px 8px;min-height:24px}
+#fullinfo{color:var(--dim);font-size:12px;margin-top:6px}
+.cmdrow{display:flex;gap:6px}.cmdrow input{flex:1;min-width:0}
+#msg{color:var(--yel);min-height:18px;margin-top:6px}
+#hint{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);width:min(460px,90%);background:#000b;padding:14px 18px;border-radius:8px;line-height:1.5;pointer-events:none}
+#tip{position:fixed;background:#000d;padding:6px 8px;border-radius:4px;pointer-events:none;display:none;max-width:420px;z-index:9;line-height:1.4}
+#status{position:absolute;left:8px;top:6px;right:8px;color:var(--dim);pointer-events:none;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:760px){
+ html,body{height:auto}
+ #app{grid-template-columns:1fr;grid-template-rows:auto 52vh 92px auto;height:auto;min-height:100vh}
+ #bar{grid-column:1;gap:3px;padding:4px}#bar .sep{display:none}#bar button,#bar select{padding:3px 6px;font-size:12px}
+ #side{grid-row:4;grid-column:1;border-left:0;border-top:1px solid var(--line);overflow:visible}
+ #view{grid-row:2}#tl{grid-row:3}
+ .wide{display:none}
+}
+`;
+const HTML = `<div id="app">
+ <div id="bar">
+  <select id="clips" title="Клип из tools/anim/motion"></select>
+  <button id="new" title="Пустой клип">Новый</button>
+  <button id="open" title="Открыть JSON с диска">Открыть…</button><input id="file" type="file" accept=".json" hidden>
+  <button id="save" title="Сохранить (Ctrl+S): в файл клипа, если редактор запущен через editor_server.py, иначе — скачать">Сохранить</button>
+  <span class="sep"></span>
+  <button id="undo" title="Отменить (Ctrl+Z)">↶</button><button id="redo" title="Вернуть (Ctrl+Shift+Z)">↷</button>
+  <span class="sep"></span>
+  <button id="play" title="Играть/стоп (пробел)">▶</button>
+  <select id="speed" class="wide" title="Скорость проигрывания"><option>0.1</option><option>0.25</option><option>0.5</option><option selected>1</option></select>
+  <button id="onion" class="on wide" title="Полупрозрачные соседние кадры">Луковица</button>
+  <button id="mirror" title="Зеркало: левая ↔ правая рука">Зеркало Л↔П</button>
+  <span class="sep"></span>
+  <select id="addtg" title="Поставить предмет-цель в кадр; ключ рядом с ним прилипает"><option value="">+ предмет…</option><option value="lever">рычаг</option><option value="door">ручка двери</option><option value="item">предмет на столе</option></select>
+ </div>
+ <div id="view"><canvas id="cv"></canvas><div id="hint"></div><div id="status"></div></div>
+ <div id="side">
+  <section>
+   <h3>Проверки<span class="grow"></span><button id="fix" title="Ближайшая допустимая поза для всех красных кадров">Поправить всё</button><button id="full" title="keyed.py + check.py: кожа, растяжение, форма кисти (нужен tools/anim/editor_server.py)">Полная</button></h3>
+   <div id="sum"></div><div id="issues"></div><div id="fullinfo"></div>
+  </section>
+  <section>
+   <h3><span id="keytitle">Ключ</span><span class="grow"></span><button id="kprev" title="Предыдущий ключ">‹</button><button id="knext" title="Следующий ключ">›</button><button id="kdel" title="Удалить ключ (Delete)">Удалить</button></h3>
+   <div id="keyp"></div>
+  </section>
+  <section>
+   <h3>Клип</h3>
+   <div class="row"><label title="Длительность клипа, с">длительность, с</label><input id="T" type="number" step="0.05" min="0.1"></div>
+   <div class="row"><label title="Момент выпуска шара, с (делит ключи на «замах» и «бросок»)">выпуск, с</label><input id="rel" type="number" step="0.01" min="0"></div>
+   <div class="row"><label>рука</label><span id="side_"></span></div>
+  </section>
+  <section>
+   <h3>Команда (ИИ)</h3>
+   <div class="cmdrow"><input id="cmd" placeholder="замах медленнее, кисть выше" title="Простые слова (медленнее/быстрее, выше/ниже, левее/правее, ближе/дальше, замах/бросок) делаются сразу; остальное получает ИИ-сессия"><button id="cmdgo" class="pri">Сделать</button></div>
+   <div id="msg"></div>
+  </section>
+ </div>
+ <div id="tl"><canvas id="tlc"></canvas></div>
+</div>
+<div id="tip"></div>`;
+const domReady = document.readyState === "loading" ? new Promise((ok) => addEventListener("DOMContentLoaded", ok)) : Promise.resolve();
+await domReady;
+(function mount() {
+  const st = document.createElement("style"); st.textContent = CSS; document.head.appendChild(st);
+  const box = document.createElement("div"); box.innerHTML = HTML; document.body.appendChild(box.firstElementChild);
+  document.body.appendChild(box.lastElementChild);
+  const game = document.getElementById("bevy"); document.getElementById("view").prepend(game);
+  document.title = "GEngine · редактор анимаций рук";
+})();
 const $ = (id) => document.getElementById(id);
 const cv = $("cv"), g = cv.getContext("2d"), tl = $("tlc"), tg = tl.getContext("2d");
 const ED = (window.ED = {
   clip: C.emptyClip(), name: "", server: false, sel: null, time: 0, playing: false, onion: true,
-  undo: [], redo: [], cache: new Map(), traj: null, issues: [], full: [], mtime: 0, dirty: false,
+  quality: 1, frameData: new Float32Array(0), undo: [], redo: [], cache: new Map(), traj: null, issues: [], full: [], mtime: 0, dirty: false,
 });
 
 // ---------- состояние и правки ----------
@@ -58,7 +150,7 @@ async function load(name) {
   if (ED.server) { const r = await fetch("api/clip?name=" + encodeURIComponent(name)); if (r.ok) { text = await r.text(); ED.mtime = Number(r.headers.get("X-Mtime") || 0); } }
   else {
     try { text = localStorage.getItem("gengine-editor:" + name); } catch (e) { text = null; }
-    if (!text) { const r = await fetch("clips/" + name); if (r.ok) text = await r.text(); }
+    if (!text) { const r = await fetch("../editor/clips/" + name); if (r.ok) text = await r.text(); }
   }
   if (text == null) { say("нет клипа " + name); return; }
   ED.name = name; ED.sel = null; ED.undo = []; ED.redo = []; ED.time = 0; ED.cache.clear();
@@ -70,8 +162,8 @@ let view = { x: 0, y: 0, w: 1, h: 1 };
 function layout() {
   const r = cv.parentElement.getBoundingClientRect(), dpr = devicePixelRatio || 1;
   cv.width = r.width * dpr; cv.height = r.height * dpr; g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  const pad = r.width < 600 ? 6 : 24, W = r.width - pad * 2, H = r.height - pad * 2;
-  const w = Math.min(W, H * C.CAM.asp); const h = w / C.CAM.asp;
+  // кадр 2.17:1 по центру — так же, как его ставит движок (crates/lite/src/editor/web.rs)
+  const w = Math.min(r.width, r.height * C.CAM.asp); const h = w / C.CAM.asp;
   view = { x: (r.width - w) / 2, y: (r.height - h) / 2, w, h };
   const t = tl.parentElement.getBoundingClientRect(); tl.width = t.width * dpr; tl.height = t.height * dpr; tg.setTransform(dpr, 0, 0, dpr, 0, 0);
   draw();
@@ -82,79 +174,52 @@ const p2n = (x, y) => [sideX(((x - view.x) / view.w) * 2 - 1), 1 - ((y - view.y)
 const p2nRaw = (x, y) => [((x - view.x) / view.w) * 2 - 1, 1 - ((y - view.y) / view.h) * 2]; // в осях клипа (с учётом стороны)
 const keyN2p = (n) => [view.x + ((n[0] + 1) / 2) * view.w, view.y + ((1 - n[1]) / 2) * view.h];
 
-function seg(a, b, r, col, thin) { // отрезок руки в 3D: обрезка ближней плоскостью, толщина по глубине
-  let A = C.toCam(a), B = C.toCam(b); const zn = 0.04;
-  if (A[2] < zn && B[2] < zn) return;
-  if (A[2] < zn) A = A.map((v, i) => v + (B[i] - v) * ((zn - A[2]) / (B[2] - A[2])));
-  if (B[2] < zn) B = B.map((v, i) => v + (A[i] - v) * ((zn - B[2]) / (A[2] - B[2])));
-  const pa = n2p(C.camToNdc(A)), pb = n2p(C.camToNdc(B));
-  const px = (z) => Math.min(view.h * 0.06, (r / (z * C.TAN_HALF)) * (view.h / 2));
-  g.strokeStyle = col; g.lineCap = "round";
-  g.lineWidth = thin ? 3 : (px(A[2]) + px(B[2])) * 0.7; g.beginPath(); g.moveTo(...pa); g.lineTo(...pb); g.stroke();
-}
-function drawArm(p, alpha, tint) { // tint — «луковица»: тонкий силуэт, чтобы не закрывать кадр
-  const thin = !!tint;
-  g.globalAlpha = alpha * 0.45; seg(p.S, p.E, 0.045, tint || "#566070", thin);
-  g.globalAlpha = alpha * 0.8; seg(p.E, p.W, 0.033, tint || "#6b7688", thin);
-  g.globalAlpha = alpha * 0.85; seg(p.W, p.tip, 0.04, tint || "#d9a98c", thin);
-  g.globalAlpha = 1;
-}
-function drawTarget(t) {
-  const [x, y] = keyN2p(t.ndc); g.lineWidth = 3; g.strokeStyle = "#c8b06a"; g.fillStyle = "#c8b06a";
-  if (t.kind === "lever") {
-    const [ex, ey] = keyN2p([t.ndc[0] + t.throw[0], t.ndc[1] + t.throw[1]]);
-    g.fillRect(x - 18, y + 30, 36, 14);
-    g.beginPath(); g.moveTo(x, y + 34); g.lineTo(x, y); g.stroke();
-    g.setLineDash([4, 4]); g.beginPath(); g.moveTo(x, y + 34); g.lineTo(ex, ey); g.stroke(); g.setLineDash([]);
-    g.beginPath(); g.arc(x, y, 7, 0, 7); g.fill(); g.beginPath(); g.arc(ex, ey, 5, 0, 7); g.stroke();
-  } else if (t.kind === "door") { g.fillRect(x - 22, y - 5, 44, 10); g.fillRect(x + 14, y - 5, 8, 24); }
-  else { g.fillRect(x - 70, y + 16, 140, 6); g.beginPath(); g.rect(x - 10, y - 14, 20, 30); g.stroke(); }
-  g.fillStyle = "#c8b06a"; g.font = "12px system-ui"; g.fillText(t.label || t.id, x + 26, y - 10);
-}
-
 function draw() {
   if (!ED.traj) return;
   const W = cv.width / (devicePixelRatio || 1), H = cv.height / (devicePixelRatio || 1);
   g.clearRect(0, 0, W, H);
-  g.fillStyle = "#23262d"; g.fillRect(view.x, view.y, view.w, view.h);
-  g.strokeStyle = "#3a3f49"; g.lineWidth = 1; g.strokeRect(view.x, view.y, view.w, view.h);
-  g.beginPath(); g.moveTo(view.x + view.w / 2 - 8, view.y + view.h / 2); g.lineTo(view.x + view.w / 2 + 8, view.y + view.h / 2);
-  g.moveTo(view.x + view.w / 2, view.y + view.h / 2 - 8); g.lineTo(view.x + view.w / 2, view.y + view.h / 2 + 8); g.stroke();
-  const tr = ED.traj, fi = frameAt(ED.time);
-  if (ED.onion) for (const d of [-6, -3, 3, 6]) { const f = fi + d; if (f >= 0 && f < tr.n) drawArm(tr.frames[f].p, 0.35, d < 0 ? "#7aa7ff" : "#ff9d7a"); }
-  const cur = tr.at(ED.time); const p = C.fk(cur.q);
-  drawArm(p, 1);
-  g.globalAlpha = 0.85; for (const t of ED.clip.targets || []) drawTarget(t); g.globalAlpha = 1; // поверх руки — чтобы было за что тянуть
-  // путь кисти
-  g.strokeStyle = "#5aa9ff55"; g.lineWidth = 1.5; g.beginPath();
-  tr.frames.forEach((fr, i) => { const q = n2p(fr.ball); i ? g.lineTo(...q) : g.moveTo(...q); }); g.stroke();
-  // ключи: цель (кольцо) и достигнутая кисть (точка)
-  ED.clip.keys.forEach((k, i) => {
-    const e = C.effKey(ED.clip, k), q = tr.keyQ[i], ach = n2p(C.toScreen(C.fk(q).ball));
-    const red = keyRed(i);
-    g.fillStyle = red ? "#ff5a5a" : i === ED.sel ? "#5aa9ff" : "#9aa3b2"; g.beginPath(); g.arc(...ach, 4, 0, 7); g.fill();
-    if (e.ndc) {
-      const tp = keyN2p(e.ndc); g.strokeStyle = g.fillStyle; g.lineWidth = i === ED.sel ? 3 : 1.5;
-      g.beginPath(); g.arc(...tp, i === ED.sel ? 11 : 8, 0, 7); g.stroke();
-      g.beginPath(); g.moveTo(...tp); g.lineTo(...ach); g.stroke();
-      g.font = "11px system-ui"; g.fillText(String(i + 1), tp[0] + 12, tp[1] - 8);
-    }
-  });
-  if (ED.sel != null) { // манипулятор локтя выбранного ключа: тянуть — направление предплечья
-    const q = tr.keyQ[ED.sel], f = C.fk(q), pe = elbowHandle(f);
-    g.fillStyle = "#f2c14e"; g.beginPath(); g.rect(pe[0] - 6, pe[1] - 6, 12, 12); g.fill();
+  const tr = ED.traj, fi = frameAt(ED.time), cur = tr.at(ED.time);
+  // гизмо для движка: [x, y, глубина, цвет, вид]; цвета и виды — crates/lite/src/editor/web.rs
+  const gz = [];
+  const put = (n, d, col, kind) => gz.push(n[0], n[1], d, col, kind, 0);
+  const disp = (b) => [sideX(b[0]), b[1]]; // кисть модели (левая) → экран клипа
+  tr.frames.forEach((fr, i) => { if (i % 2 === 0) put(disp(fr.ball), fr.ball[2], 4, 0); });
+  if (ED.onion) for (const d of [-6, -3, 3, 6]) { const f = fi + d; if (f >= 0 && f < tr.n) put(disp(tr.frames[f].ball), tr.frames[f].ball[2], 7, 2); }
+  for (const t of ED.clip.targets || []) {
+    put(t.ndc, t.depth ?? 0.4, 5, 3);
+    if (t.throw) put([t.ndc[0] + t.throw[0], t.ndc[1] + t.throw[1]], t.depth ?? 0.4, 5, 3);
   }
+  ED.clip.keys.forEach((k, i) => {
+    const e = C.effKey(ED.clip, k), ball = C.toScreen(C.fk(tr.keyQ[i]).ball), col = keyRed(i) ? 2 : i === ED.sel ? 1 : 0;
+    put(disp(ball), ball[2], 3, 2);
+    if (e.ndc) put(e.ndc, e.depth ? (Number(e.depth[0]) + Number(e.depth[1])) / 2 : ball[2], col, 1);
+  });
+  const out = window.gengineEditorOut;
+  if (ED.sel != null && out) put([out[0], out[1]], out[2], 6, 1); // локоть модели: тянуть — направление предплечья
+  ED.frameData = new Float32Array([ED.clip.side === "r" ? 1 : 0, ...cur.q, ED.quality, gz.length / 6, ...gz]);
+  // подписи поверх: номера ключей и кольцо выбранного/красного
+  g.font = "600 12px system-ui"; g.lineWidth = 2;
+  ED.clip.keys.forEach((k, i) => {
+    const e = C.effKey(ED.clip, k); if (!e.ndc) return;
+    const p = keyN2p(e.ndc), red = keyRed(i);
+    g.fillStyle = g.strokeStyle = red ? "#ff5a5a" : i === ED.sel ? "#5aa9ff" : "#e6e6e6";
+    if (red || i === ED.sel) { g.beginPath(); g.arc(...p, 13, 0, 7); g.stroke(); }
+    g.fillText(String(i + 1), p[0] + 14, p[1] - 10);
+  });
+  for (const t of ED.clip.targets || []) { const p = keyN2p(t.ndc); g.fillStyle = "#d9b860"; g.fillText(t.label || t.id, p[0] + 16, p[1] + 4); }
   const fr = tr.frames[fi], bad = ED.issues[fi].filter((x) => x.sev === "red").length + fullAt(fi).length;
   $("status").textContent = `${ED.time.toFixed(2)} с · кадр ${fi}/${tr.n - 1}${bad ? " · КРАСНЫЙ КАДР" : ""} · рука в кадре ${Math.round(fr.inFrame * 100)}% · ` +
     `локоть ${Math.round(cur.q[3])}°, плечо: подъём ${Math.round(cur.q[0])}°, плоскость ${Math.round(cur.q[1])}°, ротация ${Math.round(cur.q[2])}°`;
   $("hint").style.display = ED.clip.keys.length ? "none" : "block";
-  $("hint").innerHTML = "<b>С чего начать</b><br>1. Двойной щелчок по кадру — ключ: кисть в этом месте в этот момент.<br>" +
+  $("hint").innerHTML = "<b>С чего начать</b><br>1. Двойной щелчок (на телефоне — двойное касание) по кадру — ключ: кисть в этом месте в этот момент.<br>" +
     "2. Сдвиньте ползунок времени внизу и поставьте ещё 2–4 ключа (взмах: слева → вверху справа → обратно).<br>" +
-    "3. Пробел — проиграть. Колесо над кольцом ключа — ближе/дальше, жёлтый квадрат — локоть.<br>" +
+    "3. Пробел — проиграть. Колесо над ключом — ближе/дальше, жёлтая точка у локтя — направление предплечья.<br>" +
     "Красное на шкале — нарушение анатомии; «Поправить» — ближайшая допустимая поза.";
   drawTimeline();
 }
-function elbowHandle(f) { const a = n2p(C.toScreen(f.W)), b = n2p(C.toScreen(f.E)); const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1; return [a[0] + (dx / l) * 60, a[1] + (dy / l) * 60]; }
+// локоть и запястье модели на экране (их отдаёт движок: window.gengineEditorOut)
+function elbowHandle() { const o = window.gengineEditorOut; return o ? keyN2p([o[0], o[1]]) : [-1e9, -1e9]; }
+function wristScreen() { const o = window.gengineEditorOut; return o ? keyN2p([o[3], o[4]]) : [0, 0]; }
 const keyRed = (i) => ED.issues.some((fs) => fs.some((x) => x.key === i && x.sev === "red"));
 const frameAt = (t) => Math.max(0, Math.min(ED.traj.n - 1, Math.round((t / ED.clip.T) * (ED.traj.n - 1))));
 const fullAt = (f) => ED.full.filter((r) => r.f === f);
@@ -298,7 +363,7 @@ cv.addEventListener("pointerdown", (e) => {
     if (now - lastTap.t < 350 && Math.hypot(x - lastTap.x, y - lastTap.y) < 30 && hitKey(x, y) == null) { lastTap.t = 0; addKey(p2nRaw(x, y).map(C.r3)); return; }
     lastTap = { t: now, x, y };
   }
-  if (ED.sel != null) { const pe = elbowHandle(C.fk(ED.traj.keyQ[ED.sel])); if (Math.hypot(pe[0] - x, pe[1] - y) < 10) { drag = { kind: "elbow", before: snapshot() }; return; } }
+  if (ED.sel != null) { const pe = elbowHandle(); if (Math.hypot(pe[0] - x, pe[1] - y) < HIT) { drag = { kind: "elbow", before: snapshot() }; return; } }
   const i = hitKey(x, y);
   if (i != null) { ED.sel = i; ED.time = Number(ED.clip.keys[i].t); drag = { kind: "key", before: snapshot() }; panel(); draw(); return; }
   const t = hitTarget(x, y);
@@ -311,7 +376,7 @@ window.addEventListener("pointermove", (e) => {
   if (drag.kind === "key") { const k = ED.clip.keys[ED.sel]; delete k.attach; k.ndc = n; const a = nearTarget(n); if (a) k.attach = a; }
   else if (drag.kind === "target") drag.t.ndc = n;
   else if (drag.kind === "elbow") { // направление предплечья (локоть → запястье) на экране, в осях левой руки
-    const f = C.fk(ED.traj.keyQ[ED.sel]), w = n2p(C.toScreen(f.W)); let dx = w[0] - x, dy = -(w[1] - y); const l = Math.hypot(dx, dy) || 1;
+    const w = wristScreen(); let dx = w[0] - x, dy = -(w[1] - y); const l = Math.hypot(dx, dy) || 1;
     ED.clip.keys[ED.sel].forearm_dir = [C.r3(dx / l), C.r3(dy / l)];
   }
   recompute();
@@ -384,8 +449,9 @@ let last = 0;
 function tick(ts) {
   if (ED.playing) {
     const dt = last ? (ts - last) / 1000 : 0; ED.time += dt * Number($("speed").value);
-    if (ED.time > ED.clip.T) ED.time = 0; draw();
+    if (ED.time > ED.clip.T) ED.time = 0;
   }
+  draw(); // каждый кадр: движок берёт позу и гизмо (gengineEditor), локоть модели — из gengineEditorOut
   last = ts; requestAnimationFrame(tick);
 }
 const play = (on = !ED.playing) => { ED.playing = on; $("play").textContent = on ? "■" : "▶"; };
@@ -472,10 +538,11 @@ async function watch() {
   } catch (e) { /* сервер остановлен */ }
 }
 
+window.gengineEditor = () => ED.frameData;
 async function init() {
   let list = [];
   try { const r = await fetch("api/clips"); if (r.ok) { list = await r.json(); ED.server = true; } } catch (e) { /* статическая сборка */ }
-  if (!ED.server) { try { list = await (await fetch("clips/index.json")).json(); } catch (e) { list = []; } }
+  if (!ED.server) { try { list = await (await fetch("../editor/clips/index.json")).json(); } catch (e) { list = []; } }
   $("clips").innerHTML = '<option value="">— клип —</option>' + list.map((n) => `<option>${n}</option>`).join("");
   $("full").title += ED.server ? "" : " — недоступно в опубликованной сборке";
   window.addEventListener("resize", layout);
