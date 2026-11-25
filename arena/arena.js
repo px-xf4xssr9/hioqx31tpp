@@ -153,8 +153,25 @@ function __wbg_get_imports() {
         __wbg_generateMipmap_41bc066b35a6cd3d: function(arg0, arg1) {
             arg0.generateMipmap(arg1 >>> 0);
         },
+        __wbg_gengineCourseFx_aa1de5bbc63e7e5c: function(arg0, arg1) {
+            window.gengineCourseFx(getStringFromWasm0(arg0, arg1));
+        },
+        __wbg_gengineCourseInput_4d73b9d61a306e26: function(arg0) {
+            const ret = window.gengineCourseInput();
+            const ptr1 = passArrayF32ToWasm0(ret, wasm.__wbindgen_malloc);
+            const len1 = WASM_VECTOR_LEN;
+            getDataViewMemory0().setInt32((arg0 >>> 0) + 4 * 1, len1, true);
+            getDataViewMemory0().setInt32((arg0 >>> 0) + 4 * 0, ptr1, true);
+        },
         __wbg_gengineFx_d4356505b46b8c51: function(arg0, arg1, arg2) {
             window.gengineFx(getStringFromWasm0(arg0, arg1), arg2);
+        },
+        __wbg_gengineInput_3ed8dd722f638e13: function(arg0) {
+            const ret = window.gengineInput();
+            const ptr1 = passArrayF32ToWasm0(ret, wasm.__wbindgen_malloc);
+            const len1 = WASM_VECTOR_LEN;
+            getDataViewMemory0().setInt32((arg0 >>> 0) + 4 * 1, len1, true);
+            getDataViewMemory0().setInt32((arg0 >>> 0) + 4 * 0, ptr1, true);
         },
         __wbg_gengineInput_9b79354a736134f0: function(arg0) {
             const ret = window.gengineInput();
