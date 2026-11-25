@@ -51,7 +51,7 @@
 #cbtns div{width:68px;height:68px;border-radius:50%;background:rgba(255,255,255,.22);border:2px solid rgba(255,255,255,.5);
   display:flex;align-items:center;justify-content:center;font:700 12px system-ui;color:#fff;text-shadow:0 1px 2px #000;user-select:none;-webkit-user-select:none}
 #cbtns .bl{background:rgba(80,160,255,.45)}
-#csword{right:22%;bottom:-8%;width:18px;height:46%;background:linear-gradient(#dfe6ee,#7a8794 70%,#3b2a1c 72%);
+#csword{display:none!important;right:22%;bottom:-8%;width:18px;height:46%;background:linear-gradient(#dfe6ee,#7a8794 70%,#3b2a1c 72%);
   transform-origin:50% 100%;transform:rotate(-18deg);border-radius:3px 3px 2px 2px;box-shadow:0 0 6px #0008;transition:transform .09s}
 @media (pointer:coarse){#cbtns{display:flex}#chelp{display:none}}`;
     document.head.appendChild(st);
