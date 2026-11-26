@@ -5,8 +5,8 @@
 <meta name="robots" content="noindex,nofollow">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>GEngine · lite3d-mt</title>
-<link rel="stylesheet" href="../harness.css?b=11250936">
-<script src="coi-serviceworker.js"></script><script type="module" src="mt.js?b=11250936"></script>
+<link rel="stylesheet" href="../harness.css?b=11261726">
+<script src="coi-serviceworker.js"></script><script type="module" src="mt.js?b=11261726"></script>
 </head>
 <body data-variant="lite3d-mt">
 <canvas id="bevy" tabindex="0"></canvas>
@@ -14,10 +14,10 @@
 <div id="panel"><div class="rows"></div><button id="copy">Скопировать результат</button></div>
 <div id="error" class="hidden"><div class="msg"></div><button id="restart">Перезапустить</button></div>
 <script type="module">
-  import { fetchWithProgress } from "../harness.js?b=11250936";
-  import init from "./lite3d.js?b=11250936";
+  import { fetchWithProgress } from "../harness.js?b=11261726";
+  import init from "./lite3d.js?b=11261726";
   // Сборка Bevy после старта бросает исключение-«выход из цикла» winit — это норма.
-  init({ module_or_path: fetchWithProgress("./lite3d_bg.wasm?b=11250936") }).catch((e) => {
+  init({ module_or_path: fetchWithProgress("./lite3d_bg.wasm?b=11261726") }).catch((e) => {
     if (!String(e).includes("Using exceptions for control flow")) throw e;
   });
 </script>
