@@ -32,11 +32,13 @@ const el = (id, html = "") => {
 // Руки героя: модель со скинингом, текстура, карта рельефа и микрорельеф кожи (последние два необязательны);
 // Rust забирает их из window.gengineHands.
 const loadImg = (src) => new Promise((ok, fail) => { const i = new Image(); i.onload = () => ok(i); i.onerror = fail; i.src = src; });
+// Номер сборки — из адреса этого скрипта (arena-ui.js?b=…): без него браузер держал старые анимации из кэша.
+const BUILD_Q = new URL(document.currentScript?.src || location.href).search;
 Promise.all([
-  fetch(new URL("hands.ghnd", location.href)).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(r.status))),
-  loadImg("hands.jpg"),
-  loadImg("hands_n.jpg").catch(() => null),
-  loadImg("hands_d.jpg").catch(() => null),
+  fetch(new URL("hands.ghnd" + BUILD_Q, location.href)).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(r.status))),
+  loadImg("hands.jpg" + BUILD_Q),
+  loadImg("hands_n.jpg" + BUILD_Q).catch(() => null),
+  loadImg("hands_d.jpg" + BUILD_Q).catch(() => null),
 ]).then(([bin, img, rel, det]) => (window.gengineHands = { bin: new Uint8Array(bin), img, ...(rel ? { rel } : {}), ...(det ? { det } : {}) }))
   .catch((e) => console.warn("gengine: руки не загрузились", e));
 
