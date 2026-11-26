@@ -5,8 +5,8 @@
 <meta name="robots" content="noindex,nofollow">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>GEngine · arena</title>
-<link rel="stylesheet" href="../harness.css?b=11261926">
-<script src="arena-ui.js?b=11261926"></script><script src="journal.js?b=11261926"></script><script src="course-ui.js?b=11261926"></script>
+<link rel="stylesheet" href="../harness.css?b=11262049">
+<script src="arena-ui.js?b=11262049"></script><script src="journal.js?b=11262049"></script><script src="course-ui.js?b=11262049"></script>
 </head>
 <body data-variant="arena">
 <canvas id="bevy" tabindex="0"></canvas>
@@ -14,10 +14,10 @@
 <div id="panel"><div class="rows"></div><button id="copy">Скопировать результат</button></div>
 <div id="error" class="hidden"><div class="msg"></div><button id="restart">Перезапустить</button></div>
 <script type="module">
-  import { fetchWithProgress } from "../harness.js?b=11261926";
-  import init from "./arena.js?b=11261926";
+  import { fetchWithProgress } from "../harness.js?b=11262049";
+  import init from "./arena.js?b=11262049";
   // Сборка Bevy после старта бросает исключение-«выход из цикла» winit — это норма.
-  init({ module_or_path: fetchWithProgress("./arena_bg.wasm?b=11261926") }).catch((e) => {
+  init({ module_or_path: fetchWithProgress("./arena_bg.wasm?b=11262049") }).catch((e) => {
     if (!String(e).includes("Using exceptions for control flow")) throw e;
   });
 </script>

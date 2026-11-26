@@ -5,7 +5,7 @@
 <meta name="robots" content="noindex,nofollow">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>GEngine · bench3d</title>
-<link rel="stylesheet" href="../harness.css?b=11261926">
+<link rel="stylesheet" href="../harness.css?b=11262049">
 
 </head>
 <body data-variant="bench3d">
@@ -14,10 +14,10 @@
 <div id="panel"><div class="rows"></div><button id="copy">Скопировать результат</button></div>
 <div id="error" class="hidden"><div class="msg"></div><button id="restart">Перезапустить</button></div>
 <script type="module">
-  import { fetchWithProgress } from "../harness.js?b=11261926";
-  import init from "./bench3d.js?b=11261926";
+  import { fetchWithProgress } from "../harness.js?b=11262049";
+  import init from "./bench3d.js?b=11262049";
   // Сборка Bevy после старта бросает исключение-«выход из цикла» winit — это норма.
-  init({ module_or_path: fetchWithProgress("./bench3d_bg.wasm?b=11261926") }).catch((e) => {
+  init({ module_or_path: fetchWithProgress("./bench3d_bg.wasm?b=11262049") }).catch((e) => {
     if (!String(e).includes("Using exceptions for control flow")) throw e;
   });
 </script>

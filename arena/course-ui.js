@@ -5,7 +5,7 @@
 (() => {
   if (new URLSearchParams(location.search).get("course") !== "1") return;
   const keys = new Set();
-  const B = { jump: 0, crouch: 0, blink: 0, attack: 0, reset: 0, tier: 0, agility: 0 };
+  const B = { jump: 0, crouch: 0, blink: 0, attack: 0, reset: 0, tier: 0, agility: 0, holster: 0 };
   const has = (...c) => c.some((x) => keys.has(x));
   addEventListener("keydown", (e) => {
     if (e.code === "Space" || e.code.startsWith("Control") || e.code.startsWith("Alt")) e.preventDefault();
@@ -16,6 +16,7 @@
     if (e.code === "Digit1") B.tier = 1;
     if (e.code === "Digit2") B.tier = 2;
     if (e.code === "Digit3") B.agility = 1;
+    if (e.code === "KeyX") B.holster = 1;
   });
   addEventListener("keyup", (e) => keys.delete(e.code));
   addEventListener("blur", () => keys.clear());
@@ -27,16 +28,16 @@
   });
   addEventListener("mouseup", (e) => { if (e.button === 0) lmb = 0; if (e.button === 2) rmb = 0; });
 
-  // [прыжок, присед (нажатие), бег, медленно, наклон -1..1, наклон вперёд, Blink, меч, сброс, уровень Blink, Agility]
+  // [прыжок, присед (нажатие), бег, медленно, наклон -1..1, наклон вперёд, Blink, меч, сброс, уровень Blink, Agility, убрать/достать меч]
   window.gengineCourseInput = () => {
     const out = new Float32Array([
       has("Space") || B.jump ? 1 : 0, B.crouch,
       has("ShiftLeft", "ShiftRight") ? 1 : 0, has("AltLeft", "AltRight") ? 1 : 0,
       (has("KeyE") ? 1 : 0) - (has("KeyQ") ? 1 : 0), has("KeyZ") ? 1 : 0,
       has("KeyF") || rmb || B.blink ? 1 : 0, lmb || B.attack ? 1 : 0,
-      B.reset, B.tier, B.agility,
+      B.reset, B.tier, B.agility, B.holster,
     ]);
-    B.crouch = B.reset = B.tier = B.agility = 0;
+    B.crouch = B.reset = B.tier = B.agility = B.holster = 0;
     return out;
   };
 
@@ -57,12 +58,12 @@
     document.head.appendChild(st);
     const mk = (id, html = "") => { const d = document.createElement("div"); d.id = id; d.className = "hud"; d.innerHTML = html; document.body.appendChild(d); return d; };
     const hud = mk("chud"), blink = mk("cblink"), sword = mk("csword");
-    mk("chelp", "WASD — ходьба, Shift — бег, Alt — медленно\nПробел — прыжок / уступ, C или Ctrl — присед\nбег + присед — подкат, Q/E/Z — выглядывание\nF или ПКМ (держать) — Blink, 1/2 — уровень\n3 — Agility, ЛКМ — меч / убийство, R — на старт");
-    const btns = mk("cbtns", '<div data-b="blink" class="bl">BLINK</div><div data-b="attack">МЕЧ</div><div data-b="jump">ПРЫЖОК</div><div data-b="crouch">ПРИСЕД</div>');
+    mk("chelp", "WASD — ходьба, Shift — бег, Alt — медленно\nПробел — прыжок / уступ, C или Ctrl — присед\nбег + присед — подкат, Q/E/Z — выглядывание\nF или ПКМ (держать) — Blink, 1/2 — уровень\n3 — Agility, ЛКМ — меч / убийство, R — на старт\nX — убрать / достать меч");
+    const btns = mk("cbtns", '<div data-b="blink" class="bl">BLINK</div><div data-b="attack">МЕЧ</div><div data-b="jump">ПРЫЖОК</div><div data-b="crouch">ПРИСЕД</div><div data-b="holster">УБРАТЬ</div>');
     for (const d of btns.children) {
       const b = d.dataset.b;
       d.addEventListener("touchstart", (e) => { e.preventDefault(); e.stopPropagation(); B[b] = 1; }, { passive: false });
-      const up = (e) => { e.preventDefault(); if (b !== "crouch") B[b] = 0; };
+      const up = (e) => { e.preventDefault(); if (b !== "crouch" && b !== "holster") B[b] = 0; };
       d.addEventListener("touchend", up); d.addEventListener("touchcancel", up);
     }
     let swingT = 0;
