@@ -54,7 +54,9 @@
 #cbtns .bl{background:rgba(80,160,255,.45)}
 #csword{display:none!important;right:22%;bottom:-8%;width:18px;height:46%;background:linear-gradient(#dfe6ee,#7a8794 70%,#3b2a1c 72%);
   transform-origin:50% 100%;transform:rotate(-18deg);border-radius:3px 3px 2px 2px;box-shadow:0 0 6px #0008;transition:transform .09s}
-@media (pointer:coarse){#cbtns{display:flex}#chelp{display:none}}`;
+@media (pointer:coarse){#cbtns{display:flex}#chelp{display:none}}
+@media (pointer:coarse) and (max-height:520px){#cbtns{flex-direction:row;flex-wrap:wrap-reverse;justify-content:flex-end;width:190px;gap:8px}
+  #cbtns div{width:56px;height:56px;font-size:10px}}`;
     document.head.appendChild(st);
     const mk = (id, html = "") => { const d = document.createElement("div"); d.id = id; d.className = "hud"; d.innerHTML = html; document.body.appendChild(d); return d; };
     const hud = mk("chud"), blink = mk("cblink"), sword = mk("csword");
