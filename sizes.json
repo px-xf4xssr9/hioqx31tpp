@@ -1,9 +1,9 @@
 {
  "arena": {
   "raw": 1776813,
-  "brotli": 417472,
-  "wasm_br": 398245,
-  "total_br": 419673
+  "brotli": 417480,
+  "wasm_br": 398269,
+  "total_br": 419681
  },
  "babylon": {
   "raw": 1546424,
